@@ -1,0 +1,29 @@
+# Local configuration
+.env
+
+# Backblaze source and generated data
+dataset/raw/*
+!dataset/raw/README.md
+dataset/sample/*
+!dataset/sample/README.md
+*.csv
+*.zip
+*.parquet
+
+# Generated project artifacts
+artifacts/models/*
+!artifacts/models/README.md
+artifacts/metrics/*
+!artifacts/metrics/README.md
+artifacts/reports/*
+!artifacts/reports/README.md
+
+# Python tooling and logs
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+.venv/
+venv/

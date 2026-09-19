@@ -1,0 +1,19 @@
+project:
+  name: smart-drive-failure
+  quarter: "2026-Q1"
+  horizon_days: 7
+  random_seed: 42
+
+hdfs:
+  bronze: "/smart-drive/bronze/year=2026/quarter=Q1"
+  silver: "/smart-drive/silver/daily"
+  features: "/smart-drive/gold/features"
+  analytics: "/smart-drive/gold/analytics"
+  predictions: "/smart-drive/gold/predictions"
+  models: "/smart-drive/models/v1"
+
+ml:
+  primary_metric: pr_auc
+  models:
+    - logistic_regression
+    - random_forest
