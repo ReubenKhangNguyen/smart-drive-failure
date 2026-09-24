@@ -81,7 +81,14 @@ Backblaze CSV
   -> Streamlit dashboard
 ```
 
-Mỗi Spark job cần submit tới `spark://spark-master:7077`, đọc và ghi HDFS qua hostname nội bộ `namenode`.
+Mỗi Spark job cần submit tới `spark://spark-master:7077`, đọc và ghi HDFS qua hostname nội bộ `namenode`. Repo được mount read-only vào container `spark-master` tại `/opt/smart-drive` (working dir mặc định), ví dụ:
+
+```bash
+docker compose exec spark-master \
+  /opt/spark/bin/spark-submit \
+  --master spark://spark-master:7077 \
+  processing/spark_jobs/<job>.py
+```
 
 ## Dừng hệ thống
 

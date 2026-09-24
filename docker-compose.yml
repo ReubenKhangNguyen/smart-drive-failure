@@ -6,16 +6,16 @@ x-hadoop-common: &hadoop-common
     - smart-drive-net
 
 x-spark-common: &spark-common
-  image: bitnami/spark:3.5.1
+  image: apache/spark:3.5.1
   depends_on:
     namenode:
       condition: service_started
   environment:
-    SPARK_MASTER_URL: spark://spark-master:7077
-    SPARK_LOCAL_IP: 0.0.0.0
-    HADOOP_CONF_DIR: /opt/bitnami/spark/conf/hadoop
+    HADOOP_CONF_DIR: /opt/spark/conf/hadoop
   volumes:
-    - ./config/hadoop:/opt/bitnami/spark/conf/hadoop:ro
+    - ./config/hadoop:/opt/spark/conf/hadoop:ro
+    - .:/opt/smart-drive:ro
+  working_dir: /opt/smart-drive
   networks:
     - smart-drive-net
 
@@ -88,14 +88,16 @@ services:
   spark-master:
     <<: *spark-common
     container_name: smart-drive-spark-master
-    command: /opt/bitnami/scripts/spark/run.sh
-    environment:
-      SPARK_MODE: master
-      SPARK_MASTER_HOST: spark-master
-      SPARK_MASTER_PORT_NUMBER: 7077
-      SPARK_MASTER_WEBUI_PORT_NUMBER: 8080
-      SPARK_LOCAL_IP: 0.0.0.0
-      HADOOP_CONF_DIR: /opt/bitnami/spark/conf/hadoop
+    hostname: spark-master
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.master.Master
+      - --host
+      - spark-master
+      - --port
+      - "7077"
+      - --webui-port
+      - "8080"
     ports:
       - "${SPARK_MASTER_WEB_PORT:-8080}:8080"
       - "${SPARK_MASTER_PORT:-7077}:7077"
@@ -104,33 +106,35 @@ services:
   spark-worker1:
     <<: *spark-common
     container_name: smart-drive-spark-worker1
+    hostname: spark-worker1
     depends_on:
       spark-master:
         condition: service_started
-    command: /opt/bitnami/scripts/spark/run.sh
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.worker.Worker
+      - spark://spark-master:7077
     environment:
-      SPARK_MODE: worker
-      SPARK_MASTER_URL: spark://spark-master:7077
+      HADOOP_CONF_DIR: /opt/spark/conf/hadoop
       SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY:-2G}
       SPARK_WORKER_CORES: ${SPARK_WORKER_CORES:-2}
-      SPARK_LOCAL_IP: 0.0.0.0
-      HADOOP_CONF_DIR: /opt/bitnami/spark/conf/hadoop
     restart: unless-stopped
 
   spark-worker2:
     <<: *spark-common
     container_name: smart-drive-spark-worker2
+    hostname: spark-worker2
     depends_on:
       spark-master:
         condition: service_started
-    command: /opt/bitnami/scripts/spark/run.sh
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.worker.Worker
+      - spark://spark-master:7077
     environment:
-      SPARK_MODE: worker
-      SPARK_MASTER_URL: spark://spark-master:7077
+      HADOOP_CONF_DIR: /opt/spark/conf/hadoop
       SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY:-2G}
       SPARK_WORKER_CORES: ${SPARK_WORKER_CORES:-2}
-      SPARK_LOCAL_IP: 0.0.0.0
-      HADOOP_CONF_DIR: /opt/bitnami/spark/conf/hadoop
     restart: unless-stopped
 
   ui-dashboard:
