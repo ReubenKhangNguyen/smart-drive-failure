@@ -66,6 +66,25 @@ def classify_health(df: DataFrame, rules_version: str = RULES_VERSION) -> DataFr
     )
 
 
+def rule_risk_score(df: DataFrame) -> DataFrame:
+    """Numeric ranking score for the rules_v1 baseline: counts violated WATCH columns,
+    with a bonus for hitting the CRITICAL severe threshold. Used only to rank drives
+    for a top-K baseline comparison against the ML model in Phase 6; the 3-level
+    health_level itself is not a ranking."""
+    nonzero_flags = [
+        F.when(F.coalesce(F.col(c), F.lit(0.0)) > 0, 1).otherwise(0) for c in WATCH_COLUMNS
+    ]
+    nonzero_count = nonzero_flags[0]
+    for flag in nonzero_flags[1:]:
+        nonzero_count = nonzero_count + flag
+
+    severe = F.lit(0)
+    for col_name, threshold in CRITICAL_THRESHOLDS.items():
+        severe = severe + F.when(F.coalesce(F.col(col_name), F.lit(0.0)) >= threshold, 1).otherwise(0)
+
+    return df.withColumn("rule_risk_score", nonzero_count + severe * 10)
+
+
 def failure_within_days(silver_df: DataFrame, days: int = 7) -> DataFrame:
     """For each drive-day row, whether this serial fails within (date, date + days]."""
     fd = failure_dates(silver_df)

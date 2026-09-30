@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pyspark.sql import functions as F
 
-from analytics.health_status import baseline_failure_rate_by_level, classify_health
+from analytics.health_status import baseline_failure_rate_by_level, classify_health, rule_risk_score
 
 COLUMNS = [
     "date", "serial_number", "model", "manufacturer", "capacity_bytes", "failure",
@@ -50,6 +50,16 @@ def test_classify_health_sets_rules_version(spark):
     df = _build_fixture(spark)
     result = classify_health(df).collect()
     assert all(r["rules_version"] == "rules_v1" for r in result)
+
+
+def test_rule_risk_score_orders_critical_above_watch_above_healthy(spark):
+    df = _build_fixture(spark)
+    scored = {r["serial_number"]: r["rule_risk_score"] for r in rule_risk_score(df).collect()}
+
+    assert scored["SN_HEALTHY"] == 0
+    assert scored["SN_WATCH"] == 1
+    assert scored["SN_CRITICAL_COMBO"] > scored["SN_WATCH"]
+    assert scored["SN_CRITICAL_SEVERE"] > scored["SN_WATCH"]
 
 
 def test_baseline_failure_rate_by_level(spark):
