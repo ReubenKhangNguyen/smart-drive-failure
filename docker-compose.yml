@@ -6,7 +6,10 @@ x-hadoop-common: &hadoop-common
     - smart-drive-net
 
 x-spark-common: &spark-common
-  image: apache/spark:3.5.1
+  build:
+    context: .
+    dockerfile: Dockerfile.spark
+  image: smart-drive-failure-spark:3.5.1-numpy
   depends_on:
     namenode:
       condition: service_started
