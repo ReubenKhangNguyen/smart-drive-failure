@@ -31,7 +31,17 @@ def build_pipeline(feature_cols: List[str], model_type: str, label_col: str = LA
         )
     elif model_type == "random_forest":
         classifier = RandomForestClassifier(
-            featuresCol="features", labelCol=label_col, weightCol=weight_col, numTrees=30, maxDepth=8, seed=42
+            featuresCol="features",
+            labelCol=label_col,
+            weightCol=weight_col,
+            numTrees=30,
+            maxDepth=8,
+            seed=42,
+            # model_index/manufacturer_index carry StringIndexer's nominal-attribute
+            # metadata through VectorAssembler; maxBins must cover the largest
+            # category count (model has ~100+ distinct values in Q1-2026) or MLlib
+            # raises "DecisionTree requires maxBins to be at least as large as ...".
+            maxBins=256,
         )
     else:
         raise ValueError("Unknown model_type: {}".format(model_type))
