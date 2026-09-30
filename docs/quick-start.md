@@ -45,6 +45,8 @@ Mở các giao diện sau:
 
 `docker compose ps` phải cho thấy NameNode, ba DataNode, Spark Master, hai Spark Worker và `ui-dashboard` ở trạng thái running. Trong Spark Master UI cần có hai worker đã đăng ký.
 
+`spark-master`/`spark-worker1`/`spark-worker2` giờ build từ `Dockerfile.spark` (base `apache/spark:3.5.1` + `numpy`, cần cho `pyspark.ml`) thay vì kéo thẳng image gốc — `docker compose up -d --build` tự build lần đầu; nếu cụm đã chạy sẵn từ trước và chỉ `git pull` code mới, phải chạy `docker compose build spark-master spark-worker1 spark-worker2` rồi `docker compose up -d` lại thì thay đổi mới có hiệu lực.
+
 ## 3. Kiểm tra HDFS
 
 Tạo các tầng dữ liệu chuẩn trên HDFS:
