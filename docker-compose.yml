@@ -15,6 +15,7 @@ x-spark-common: &spark-common
   volumes:
     - ./config/hadoop:/opt/spark/conf/hadoop:ro
     - .:/opt/smart-drive:ro
+    - ./artifacts:/opt/smart-drive/artifacts
   working_dir: /opt/smart-drive
   networks:
     - smart-drive-net
@@ -33,6 +34,7 @@ services:
       - "${NAMENODE_RPC_PORT:-9000}:9000"
     volumes:
       - namenode_data:/hadoop/dfs/name
+      - "C:/dataset_smart_drive_failure/data_Q1_2026:/external_data:ro"
     networks:
       - smart-drive-net
     restart: unless-stopped
@@ -151,10 +153,29 @@ services:
       - "${DASHBOARD_PORT:-8501}:8501"
     volumes:
       - ./ui_dashboard:/app/ui_dashboard:ro
+      - ./artifacts:/app/artifacts:ro
     command: streamlit run ui_dashboard/app.py --server.address 0.0.0.0 --server.port 8501
     networks:
       - smart-drive-net
     restart: unless-stopped
+
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.tests
+    container_name: smart-drive-tests
+    profiles:
+      - test
+    environment:
+      HADOOP_CONF_DIR: /opt/spark/conf/hadoop
+    volumes:
+      - ./config/hadoop:/opt/spark/conf/hadoop:ro
+      - .:/opt/smart-drive:ro
+      - ./artifacts:/opt/smart-drive/artifacts
+    working_dir: /opt/smart-drive
+    networks:
+      - smart-drive-net
+    command: ["python3", "-m", "pytest", "-q"]
 
 volumes:
   namenode_data:
