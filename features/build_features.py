@@ -60,7 +60,10 @@ def add_window_features(df: DataFrame, columns: List[str] = SMART_COLUMNS, windo
         for w in windows:
             win = row_window.rowsBetween(-(w - 1), 0)
             df = df.withColumn("{}_max_{}d".format(c, w), F.max(c).over(win))
-            df = df.withColumn("{}_delta_{}d".format(c, w), F.col(c) - F.lag(c, w).over(row_window))
+            # lag(c, w) is null for a serial's first w rows (not enough history yet);
+            # coalesce to 0 so VectorAssembler never sees a NaN downstream.
+            delta = F.col(c) - F.coalesce(F.lag(c, w).over(row_window), F.col(c))
+            df = df.withColumn("{}_delta_{}d".format(c, w), delta)
             df = df.withColumn("{}_increasing_days_{}d".format(c, w), F.sum(inc_col).over(win))
 
     return df.drop(*increased_cols)
