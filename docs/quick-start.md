@@ -123,6 +123,38 @@ docker compose exec namenode ls /external_data
 
 Script nạp HDFS (`ingestion/hdfs_loader.py`, Phase 2) đọc từ đường dẫn mount này thay vì `dataset/raw/` trong repo.
 
+## 7. Demo streaming Kafka (Phase 2.b, lớp trình diễn bổ sung)
+
+Mô phỏng luồng SMART hằng ngày qua Kafka + Spark Structured Streaming. **Batch pipeline (Bronze → Silver → Gold qua Spark) vẫn là nguồn chính cho phân tích và huấn luyện** — đây chỉ là lớp trình diễn bổ sung minh họa khả năng chấm điểm gần thời gian thực, không thay thế batch.
+
+Kiểm tra RAM còn trống trước khi bật (Kafka + Zookeeper cần thêm ~1-2 GB):
+
+```bash
+docker stats --no-stream
+```
+
+Bật profile `streaming` (không tự khởi động cùng `docker compose up -d` mặc định):
+
+```bash
+docker compose --profile streaming up -d zookeeper kafka
+```
+
+Chạy demo (producer phát 1-3 ngày mẫu, consumer Spark Structured Streaming tiêu thụ và ghi `/smart-drive/streaming_output`):
+
+```bash
+python scripts/run_streaming_demo.py \
+  --host-source-dir "C:/dataset_smart_drive_failure/data_Q1_2026/data_Q1_2026" \
+  --dates 2026-01-01
+```
+
+`pipeline/streaming_consumer.py` dùng connector Kafka của Spark qua `--packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1` (tải qua Maven lúc chạy, cần mạng; `scripts/run_streaming_demo.py` đã tự thêm flag này). Logic làm sạch dùng lại `processing/spark_jobs/smart_etl.cast_and_clean_columns` — cùng hàm với batch pipeline (Phase 3), chỉ bỏ bước khử trùng theo khóa vì Spark Structured Streaming không hỗ trợ window không giới hạn thời gian.
+
+Sau khi demo xong, tắt profile để trả lại RAM:
+
+```bash
+docker compose --profile streaming stop
+```
+
 ## Dừng hệ thống
 
 ```bash
