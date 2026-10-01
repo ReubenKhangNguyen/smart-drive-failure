@@ -9,6 +9,7 @@ dataset/sample/*
 *.csv
 *.zip
 *.parquet
+!tests/fixtures/**/*.csv
 
 # Generated project artifacts
 artifacts/models/*

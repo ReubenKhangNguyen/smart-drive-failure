@@ -10,7 +10,29 @@ hdfs:
   features: "/smart-drive/gold/features"
   analytics: "/smart-drive/gold/analytics"
   predictions: "/smart-drive/gold/predictions"
+  health_status: "/smart-drive/gold/health_status"
   models: "/smart-drive/models/v1"
+  bronze_replication: 1
+  silver_replication: 2
+  gold_replication: 2
+
+data:
+  start_date: "2026-01-01"
+  end_date: "2026-03-31"
+  required_columns:
+    - date
+    - serial_number
+    - model
+    - capacity_bytes
+    - failure
+    - smart_5_raw
+    - smart_9_raw
+    - smart_187_raw
+    - smart_188_raw
+    - smart_194_raw
+    - smart_197_raw
+    - smart_198_raw
+    - smart_199_raw
 
 ml:
   primary_metric: pr_auc
