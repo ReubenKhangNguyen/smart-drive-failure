@@ -2,6 +2,6 @@ FROM apache/spark:3.5.1
 
 USER root
 
-RUN pip3 install --no-cache-dir numpy==1.24.4 pandas==2.0.3
+RUN pip3 install --no-cache-dir numpy==1.24.4 pandas==2.0.3 pyyaml==6.0.2
 
 USER spark
