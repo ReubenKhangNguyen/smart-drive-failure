@@ -62,3 +62,15 @@ def tie_note(scores, k: int = 100) -> Optional[str]:
             "được chúng. Thứ hạng giữa các ổ này được xếp theo margin của mô hình (logit, không hiển thị ở bảng), "
             "rồi mới theo số serial nếu margin cũng bằng nhau. Ổ khác cũng đạt 1.0 nhưng margin thấp hơn có thể nằm "
             "ngoài Top-{}.".format(tied, len(values), k, k))
+
+
+def missing_flag_note(features) -> Optional[str]:
+    """Note when `<smart>_is_missing` flags are among the top LR features. A missing SMART attribute means
+    the drive does not report it, which tracks the drive type more than its health."""
+    flags = [f for f in features if str(f).endswith("_is_missing")]
+    if not flags:
+        return None
+    return ("Các cờ thiếu dữ liệu ({}) nằm trong nhóm đặc trưng quan trọng nhất của LR. Thiếu một thuộc tính SMART nghĩa là ổ "
+            "không báo thuộc tính đó, thường gắn với loại hoặc dòng ổ hơn là tình trạng sức khỏe, nên đây có thể phản ánh loại ổ "
+            "chứ không phải dấu hiệu sắp hỏng. Ghi nhận để diễn giải; chưa được đánh giá và mô hình không bị sửa.".format(", ".join(flags)))
+

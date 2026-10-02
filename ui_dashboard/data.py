@@ -169,3 +169,10 @@ def metrics_views(metrics: pd.DataFrame) -> Dict[str, pd.DataFrame]:
         "tail_size": pd.DataFrame({"rows": tail["rows"].iloc[:1], "positives": tail["positives"].iloc[:1]}).reset_index(drop=True),
         "normal_size": pd.DataFrame({"rows": normal["rows"].iloc[:1], "positives": normal["positives"].iloc[:1]}).reset_index(drop=True),
     }
+
+
+def style_metrics(df: pd.DataFrame):
+    """Styler for metric tables: fixed decimals and an em dash instead of None/NaN."""
+    formats = {c: ("{:.4f}" if "AUC" in c else "{:.2f}") for c in df.columns if c != "Model"}
+    return df.style.format(formats, na_rep="—")
+

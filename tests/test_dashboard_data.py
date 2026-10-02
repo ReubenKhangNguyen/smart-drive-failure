@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from ui_dashboard import data
-from ui_dashboard.explain import RISK_SCORE_NOTE, TAIL_NOTE, conflict_note, tie_note
+from ui_dashboard.explain import RISK_SCORE_NOTE, TAIL_NOTE, conflict_note, missing_flag_note, tie_note
 
 
 def _write(base, name, df):
@@ -152,3 +152,20 @@ def test_tie_note_warns_when_most_topk_scores_are_saturated_at_one():
     assert "xác suất" not in note.lower()
     assert tie_note([0.9, 0.8, 0.7, 1.0], 4) is None  # a single saturated score is not a tie problem
     assert tie_note([], 10) is None
+
+
+def test_style_metrics_shows_a_dash_instead_of_none_or_nan():
+    df = pd.DataFrame({"Model": ["LR", "Luật"], "PR-AUC": [0.02449, None], "Recall@100 (%)": [9.2072, 1.6373]})
+
+    html = data.style_metrics(df).to_html()
+
+    assert "—" in html and "None" not in html and "nan" not in html.lower()
+    assert "0.0245" in html and "9.21" in html  # fixed decimals per column kind
+
+
+def test_missing_flag_note_lists_the_flags_found_and_stays_cautious():
+    note = missing_flag_note(["smart_197_raw", "smart_187_raw_is_missing", "smart_188_raw_is_missing"])
+
+    assert "smart_187_raw_is_missing" in note and "smart_188_raw_is_missing" in note
+    assert "loại hoặc dòng ổ" in note and "không bị sửa" in note
+    assert missing_flag_note(["smart_197_raw", "smart_5_raw_max_7d"]) is None

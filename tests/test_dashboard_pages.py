@@ -70,8 +70,10 @@ def _fill(dashboard, reports):
                      "precision_at_k": 1.0, "rows": 288, "positives": 288})
     _w(dashboard, "model_metrics", pd.DataFrame(rows))
     _w(dashboard, "model_feature_importance", pd.DataFrame({
-        "model": ["logistic_regression", "random_forest"], "rank": [1, 1], "feature": ["smart_5_raw", "smart_197_raw_max_7d"],
-        "importance": [1.5, 0.11], "source": ["LR vtest: |hệ số| × độ lệch chuẩn", "RF, một lần chạy Phase 6, không tái lập"]}))
+        "model": ["logistic_regression", "logistic_regression", "random_forest"], "rank": [1, 2, 1],
+        "feature": ["smart_5_raw", "smart_187_raw_is_missing", "smart_197_raw_max_7d"],
+        "importance": [1.5, 1.2, 0.11],
+        "source": ["LR vtest: |hệ số| × độ lệch chuẩn"] * 2 + ["RF, một lần chạy Phase 6, không tái lập"]}))
     _w(dashboard, "afr_by_model", pd.DataFrame({"model": ["M1", "M2"], "drive_days": [200000, 50], "failures": [3, 1], "afr": [0.0055, 7.3]}))
     _w(dashboard, "afr_by_manufacturer", pd.DataFrame({"manufacturer": ["HGST", None], "drive_days": [10, 5], "failures": [1, 0], "afr": [0.1, 0.0]}))
     _w(dashboard, "smart_distribution", pd.DataFrame({
@@ -207,3 +209,36 @@ def test_failure_prediction_heading_has_no_placeholder_date_without_data(empty_d
 
     assert not at.exception
     assert any(sh.value == "Top-100 ổ có điểm rủi ro cao nhất" for sh in at.subheader)
+
+
+def test_smart_history_has_one_chart_per_indicator_and_skips_all_null_series(empty_dirs):
+    _fill(*empty_dirs)
+
+    at = _page("failure_prediction").run()
+    text = _texts(at)
+
+    assert not at.exception
+    for name in ("smart_5_raw", "smart_187_raw", "smart_197_raw", "smart_198_raw"):
+        assert "**{}**".format(name) in text
+    # 3 history line charts (smart_187_raw is all null in the fixture: no chart for it) + 2 importance bar charts
+    assert len(at.get("arrow_vega_lite_chart")) == 3 + 2
+    assert "Không có giá trị (null) trong 30 ngày" in text
+
+
+def test_data_analytics_tables_use_short_column_names(empty_dirs):
+    _fill(*empty_dirs)
+
+    at = _page("data_analytics").run()
+    columns = {c for frame in at.dataframe for c in frame.value.columns}
+
+    assert not at.exception
+    assert "Gấp (lần)" in columns and "TB smart_198" in columns and "% null smart_187" in columns
+    assert "Gấp bao nhiêu lần mức Khỏe" not in columns and "mean_smart_198_raw" not in columns
+
+
+def test_failure_prediction_notes_that_missing_flags_may_reflect_drive_type(empty_dirs):
+    _fill(*empty_dirs)
+
+    text = _texts(_page("failure_prediction").run())
+
+    assert "smart_187_raw_is_missing" in text and "loại hoặc dòng ổ" in text

@@ -17,15 +17,18 @@ if distribution is not None and len(distribution):
     view = data.health_sorted(distribution)
     healthy_rate = view.loc[view["health_level"] == "HEALTHY", "failure_rate_7d"]
     base = float(healthy_rate.iloc[0]) if len(healthy_rate) and healthy_rate.iloc[0] else None
-    view["Mức"] = view["health_level"].map(data.HEALTH_LABELS)
-    view["Tỷ lệ ngày-ổ (%)"] = view["share"] * 100
-    view["Tỷ lệ hỏng thật trong 7 ngày sau (%)"] = view["failure_rate_7d"] * 100
-    view["Gấp bao nhiêu lần mức Khỏe"] = view["failure_rate_7d"] / base if base else float("nan")
+    view["Mức"] = view["health_level"].map(data.HEALTH_SHORT_LABELS)
+    view["% ngày-ổ"] = view["share"] * 100
+    view["% hỏng thật"] = view["failure_rate_7d"] * 100
+    view["Gấp (lần)"] = view["failure_rate_7d"] / base if base else float("nan")
     st.dataframe(
-        view[["Mức", "drive_days", "Tỷ lệ ngày-ổ (%)", "labeled_rows", "failed_within_7d",
-              "Tỷ lệ hỏng thật trong 7 ngày sau (%)", "Gấp bao nhiêu lần mức Khỏe"]].rename(
-            columns={"drive_days": "Ngày-ổ", "labeled_rows": "Ngày-ổ đã gán nhãn", "failed_within_7d": "Hỏng trong 7 ngày sau"}),
-        use_container_width=True, hide_index=True)
+        view[["Mức", "drive_days", "% ngày-ổ", "labeled_rows", "failed_within_7d", "% hỏng thật", "Gấp (lần)"]].rename(
+            columns={"drive_days": "Ngày-ổ", "labeled_rows": "Đã gán nhãn", "failed_within_7d": "Hỏng ≤7 ngày"}),
+        use_container_width=True, hide_index=True,
+        column_config={"% ngày-ổ": st.column_config.NumberColumn(format="%.2f"),
+                       "% hỏng thật": st.column_config.NumberColumn(format="%.4f"),
+                       "Gấp (lần)": st.column_config.NumberColumn(format="%.1f")})
+    st.caption("% hỏng thật = tỷ lệ ngày-ổ hỏng trong 7 ngày sau (đã gán nhãn); Gấp (lần) = so với mức Khỏe.")
     st.caption("Tỷ lệ hỏng thật tính trên các ngày-ổ đã loại 7 ngày cuối dataset (right-censoring). Đây là baseline của luật.")
 
 st.subheader("Ổ cần chú ý trong ngày chấm điểm" + (" ({})".format(scored_date) if scored_date else ""))
@@ -69,13 +72,21 @@ st.caption(
 clusters = common.require("kmeans_clusters")
 if clusters is not None and len(clusters):
     view = clusters.sort_values("cluster_id").copy()
-    view["Tỷ lệ ổ hỏng (%)"] = view["failed_rate"] * 100
-    view["smart_187 bị null (%)"] = view["smart_187_missing_share"] * 100
+    view["% hỏng"] = view["failed_rate"] * 100
+    view["% null smart_187"] = view["smart_187_missing_share"] * 100
     st.dataframe(
-        view[["cluster_id", "cluster_type", "size", "healthy_count", "failed_count", "Tỷ lệ ổ hỏng (%)",
-              "mean_smart_5_raw", "mean_smart_187_raw", "mean_smart_197_raw", "mean_smart_198_raw", "smart_187 bị null (%)"]].rename(
-            columns={"cluster_id": "Cụm", "cluster_type": "Loại", "size": "Số ổ", "healthy_count": "Khỏe", "failed_count": "Hỏng"}),
-        use_container_width=True, hide_index=True)
+        view[["cluster_id", "cluster_type", "size", "healthy_count", "failed_count", "% hỏng",
+              "mean_smart_5_raw", "mean_smart_187_raw", "mean_smart_197_raw", "mean_smart_198_raw", "% null smart_187"]].rename(
+            columns={"cluster_id": "Cụm", "cluster_type": "Loại", "size": "Số ổ", "healthy_count": "Khỏe", "failed_count": "Hỏng",
+                     "mean_smart_5_raw": "TB smart_5", "mean_smart_187_raw": "TB smart_187",
+                     "mean_smart_197_raw": "TB smart_197", "mean_smart_198_raw": "TB smart_198"}),
+        use_container_width=True, hide_index=True,
+        column_config={"% hỏng": st.column_config.NumberColumn(format="%.2f"),
+                       "% null smart_187": st.column_config.NumberColumn(format="%.1f"),
+                       "TB smart_5": st.column_config.NumberColumn(format="%.1f"),
+                       "TB smart_187": st.column_config.NumberColumn(format="%.1f"),
+                       "TB smart_197": st.column_config.NumberColumn(format="%.1f"),
+                       "TB smart_198": st.column_config.NumberColumn(format="%.1f")})
     zero = view[view["cluster_type"] == "zero_signal"]
     if len(zero):
         st.info(
