@@ -130,3 +130,20 @@ docker compose down
 ```
 
 Lệnh trên giữ các named volume HDFS. Chỉ dùng `docker compose down -v` khi chủ động muốn xóa toàn bộ dữ liệu HDFS và khởi tạo lại cluster.
+
+## 8. Dashboard (Phase 8)
+
+Dashboard chỉ đọc `artifacts/dashboard/` (và `artifacts/reports/` cho log pipeline), không đọc HDFS. Tạo các bảng nó cần (chạy tuần tự, trên Git Bash đặt `MSYS_NO_PATHCONV=1`):
+
+```bash
+# HĐ6: AFR, phân phối SMART, tín hiệu trước khi hỏng
+docker compose exec -e PYTHONPATH=/opt/smart-drive spark-master /opt/spark/bin/spark-submit --master spark://spark-master:7077 /opt/smart-drive/analytics/build_analytics.py
+# HĐ7: phân cụm K-Means (chạy riêng, ~8-12 phút)
+docker compose exec -e PYTHONPATH=/opt/smart-drive spark-master /opt/spark/bin/spark-submit --master spark://spark-master:7077 /opt/smart-drive/analytics/kmeans_segmentation.py
+# HĐ8: bảng tổng hợp, Top-K, metric model (cần Gold predictions đã chấm điểm)
+docker compose exec -e PYTHONPATH=/opt/smart-drive spark-master /opt/spark/bin/spark-submit --master spark://spark-master:7077 /opt/smart-drive/analytics/export_dashboard.py
+docker compose restart ui-dashboard
+```
+
+Mở http://localhost:8501. Bảng nào chưa có thì trang tương ứng hiện hướng dẫn tạo bảng đó, không báo lỗi. Test dashboard chạy trong container `tests` (đã có `streamlit==1.38.0`): `docker compose run --rm tests python3 -m pytest -q tests/test_dashboard_data.py tests/test_dashboard_pages.py`.
+
