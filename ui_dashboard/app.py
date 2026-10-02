@@ -1,19 +1,20 @@
-"""Temporary Streamlit UI shell: it will read prepared HDFS Gold outputs and display SMART-drive analytics and seven-day failure-risk predictions."""
+"""Streamlit entry point: a thin router. Pages only read artifacts/dashboard (HD6-HD8), never HDFS."""
 
-import os
+import sys
+from pathlib import Path
 
-import streamlit as st
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import streamlit as st  # noqa: E402
 
 st.set_page_config(page_title="SMART Drive Failure", page_icon="💽", layout="wide")
-st.title("SMART Drive Failure")
-st.caption("Big Data analytics and 7-day failure-risk prediction")
 
-st.info(
-    "The infrastructure is running. Execute ingestion and the Spark pipeline to populate "
-    "the HDFS Gold layer; this UI will then display the prepared outputs."
-)
+PAGES = [
+    st.Page("pages/overview.py", title="Tổng quan", icon="📊", default=True),
+    st.Page("pages/smart_analysis.py", title="Phân tích SMART", icon="🔬"),
+    st.Page("pages/data_analytics.py", title="Tình trạng ổ cứng", icon="🩺"),
+    st.Page("pages/failure_prediction.py", title="Dự đoán hỏng 7 ngày", icon="⚠️"),
+    st.Page("pages/cluster_performance.py", title="Hiệu năng cụm", icon="⚙️"),
+]
 
-left, right = st.columns(2)
-left.metric("HDFS endpoint", os.environ.get("HDFS_NAMENODE_URL", "Not configured"))
-right.metric("Spark endpoint", os.environ.get("SPARK_MASTER_URL", "Not configured"))
+st.navigation(PAGES).run()
