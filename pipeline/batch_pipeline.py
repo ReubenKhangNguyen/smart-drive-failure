@@ -82,6 +82,7 @@ def build_steps(spark, config: Dict[str, Any]) -> List[PipelineStep]:
     write into the real Gold paths (see docs/decisions.md, 2026-10-02)."""
     from pyspark.sql import functions as F
 
+    from analytics.build_analytics import run as run_build_analytics
     from analytics.health_status import run as run_health_status
     from features.build_features import build_features, feature_columns
     from features.label import assign_split, build_labeled_dataset
@@ -92,9 +93,14 @@ def build_steps(spark, config: Dict[str, Any]) -> List[PipelineStep]:
     silver_path = hdfs_uri(config, "silver")
     features_path = hdfs_uri(config, "features")
     health_status_path = hdfs_uri(config, "health_status")
+    analytics_path = hdfs_uri(config, "analytics")
+    smart_columns = [c for c in data_cfg["required_columns"] if c.startswith("smart_")]
 
     def step_silver():
         return run_smart_etl(spark, bronze_path, silver_path)
+
+    def step_analytics():
+        return run_build_analytics(spark, silver_path, analytics_path, smart_columns)
 
     def step_health_status():
         return run_health_status(spark, silver_path, health_status_path)
@@ -121,6 +127,7 @@ def build_steps(spark, config: Dict[str, Any]) -> List[PipelineStep]:
 
     return [
         ("silver_etl", step_silver),
+        ("analytics", step_analytics),
         ("health_status", step_health_status),
         ("features", step_features),
     ]
