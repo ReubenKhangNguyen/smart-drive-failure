@@ -48,3 +48,13 @@ ml:
   models:
     - logistic_regression
     - random_forest
+
+kmeans:
+  k_min: 3
+  k_max: 8
+  max_iter: 50
+  columns:
+    - smart_5_raw
+    - smart_187_raw
+    - smart_197_raw
+    - smart_198_raw

@@ -109,6 +109,15 @@ def build_all(silver_df: DataFrame, columns: Sequence[str]) -> Dict[str, DataFra
     }
 
 
+def write_table(spark: SparkSession, df: DataFrame, analytics_path: str, name: str, export_root: Path) -> int:
+    """Write one small Gold analytics table (own directory, overwrite) and export it as a
+    single-file Parquet for the dashboard. Returns the written row count."""
+    df.write.mode("overwrite").parquet("{}/{}".format(analytics_path, name))
+    written = spark.read.parquet("{}/{}".format(analytics_path, name))
+    written.coalesce(1).write.mode("overwrite").parquet((export_root / (name + ".parquet")).as_uri())
+    return written.count()
+
+
 def run(
     spark: SparkSession,
     silver_path: str,
@@ -122,12 +131,7 @@ def run(
     export_root = Path(export_dir) if export_dir else DEFAULT_EXPORT_DIR
     tables = build_all(spark.read.parquet(silver_path), columns)
 
-    rows = {}  # type: Dict[str, int]
-    for name, df in tables.items():
-        df.write.mode("overwrite").parquet("{}/{}".format(analytics_path, name))
-        written = spark.read.parquet("{}/{}".format(analytics_path, name))
-        written.coalesce(1).write.mode("overwrite").parquet((export_root / (name + ".parquet")).as_uri())
-        rows[name] = written.count()
+    rows = {name: write_table(spark, df, analytics_path, name, export_root) for name, df in tables.items()}
     return {"rows_out": sum(rows.values()), "tables": rows, "elapsed_seconds": round(time.time() - start, 1)}
 
 
