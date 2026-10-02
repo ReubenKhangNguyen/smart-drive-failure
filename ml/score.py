@@ -4,6 +4,7 @@ import argparse
 from typing import Any, Dict
 
 from pyspark.ml import PipelineModel
+from pyspark.ml.functions import vector_to_array
 from pyspark.sql import DataFrame, SparkSession, Window
 from pyspark.sql import functions as F
 
@@ -14,11 +15,15 @@ from ml.evaluate import extract_risk_score
 def score_day(model: PipelineModel, features_df: DataFrame, score_date: str, k: int) -> DataFrame:
     """Score one day of Gold features -> HD4 schema (date, serial_number, model,
     risk_score, risk_rank, alert, model_version). risk_rank/alert are computed
-    per-day, independent of any other day."""
+    per-day, independent of any other day; ties in risk_score are ordered by model margin."""
     day_df = features_df.where(F.col("date") == score_date)
     predictions = extract_risk_score(model.transform(day_df))
 
-    window = Window.orderBy(F.col("risk_score").desc(), F.col("serial_number"))
+    # risk_score saturates at exactly 1.0 for many drives (sigmoid), so ties are broken by the model
+    # margin (rawPrediction[1] = the logit) first and only then by serial_number. The margin is used
+    # for ranking only and is NOT written to HD4.
+    predictions = predictions.withColumn("_margin", vector_to_array("rawPrediction")[1])
+    window = Window.orderBy(F.col("risk_score").desc(), F.col("_margin").desc(), F.col("serial_number"))
     ranked = predictions.withColumn("risk_rank", F.row_number().over(window))
     ranked = ranked.withColumn("alert", F.col("risk_rank") <= k)
 
