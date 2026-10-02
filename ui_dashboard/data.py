@@ -171,8 +171,13 @@ def metrics_views(metrics: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     }
 
 
-def style_metrics(df: pd.DataFrame):
-    """Styler for metric tables: fixed decimals and an em dash instead of None/NaN."""
-    formats = {c: ("{:.4f}" if "AUC" in c else "{:.2f}") for c in df.columns if c != "Model"}
-    return df.style.format(formats, na_rep="—")
-
+def style_metrics(df: pd.DataFrame) -> pd.DataFrame:
+    """Metric table as display strings: fixed decimals and an em dash for missing values. (Streamlit ignores
+    Styler `na_rep` and would show None, so the formatting is done here.)"""
+    out = df.copy()
+    for column in out.columns:
+        if column == "Model":
+            continue
+        decimals = 4 if "AUC" in column else 2
+        out[column] = out[column].map(lambda v, d=decimals: "—" if pd.isna(v) else "{:.{d}f}".format(float(v), d=d))
+    return out

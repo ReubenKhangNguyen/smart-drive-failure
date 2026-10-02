@@ -157,10 +157,12 @@ def test_tie_note_warns_when_most_topk_scores_are_saturated_at_one():
 def test_style_metrics_shows_a_dash_instead_of_none_or_nan():
     df = pd.DataFrame({"Model": ["LR", "Luật"], "PR-AUC": [0.02449, None], "Recall@100 (%)": [9.2072, 1.6373]})
 
-    html = data.style_metrics(df).to_html()
+    out = data.style_metrics(df)
 
-    assert "—" in html and "None" not in html and "nan" not in html.lower()
-    assert "0.0245" in html and "9.21" in html  # fixed decimals per column kind
+    assert list(out["PR-AUC"]) == ["0.0245", "—"]
+    assert list(out["Recall@100 (%)"]) == ["9.21", "1.64"]
+    assert list(out["Model"]) == ["LR", "Luật"]
+    assert not out.astype(str).apply(lambda col: col.str.contains("None|nan", case=False)).any().any()
 
 
 def test_missing_flag_note_lists_the_flags_found_and_stays_cautious():
