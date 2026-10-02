@@ -5,13 +5,16 @@ project:
   random_seed: 42
 
 hdfs:
+  namenode_url: "hdfs://namenode:9000"
   bronze: "/smart-drive/bronze/year=2026/quarter=Q1"
   silver: "/smart-drive/silver/daily"
   features: "/smart-drive/gold/features"
   analytics: "/smart-drive/gold/analytics"
   predictions: "/smart-drive/gold/predictions"
   health_status: "/smart-drive/gold/health_status"
-  models: "/smart-drive/models/v1"
+  models_base: "/smart-drive/models"
+  streaming_output: "/smart-drive/streaming_output"
+  streaming_checkpoint: "/smart-drive/streaming_checkpoint"
   bronze_replication: 1
   silver_replication: 2
   gold_replication: 2
@@ -19,6 +22,9 @@ hdfs:
 data:
   start_date: "2026-01-01"
   end_date: "2026-03-31"
+  warmup_end_date: "2026-01-30"
+  train_end_date: "2026-03-03"
+  val_end_date: "2026-03-14"
   required_columns:
     - date
     - serial_number
@@ -36,6 +42,9 @@ data:
 
 ml:
   primary_metric: pr_auc
+  k: 100
+  model_version: "v20260930-1"
+  chosen_model: logistic_regression
   models:
     - logistic_regression
     - random_forest
