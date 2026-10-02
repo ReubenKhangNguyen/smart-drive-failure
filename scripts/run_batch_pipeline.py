@@ -3,7 +3,7 @@ from __future__ import annotations
 from pyspark.sql import SparkSession
 
 from config.settings import load_config
-from pipeline.batch_pipeline import build_steps, run_steps
+from pipeline.batch_pipeline import build_steps, run_steps, write_run_report
 
 
 def main() -> int:
@@ -13,6 +13,7 @@ def main() -> int:
     steps = build_steps(spark, config)
     result = run_steps(steps)
     print("Batch pipeline result:", result)
+    print("Run report:", write_run_report("batch_pipeline", result))
     spark.stop()
     return 0 if result["status"] == "ok" else 1
 

@@ -19,7 +19,7 @@ def test_project_yaml_has_namenode_url_and_no_sample_keys():
 
 
 def test_dynamic_overwrite_keeps_other_partitions(spark, tmp_path):
-    path = str(tmp_path / "out")
+    path = (tmp_path / "out").as_uri()  # file:// — the test container defaults to HDFS otherwise
     day1 = spark.createDataFrame([("2026-01-01", 1)], ["date", "v"])
     day2 = spark.createDataFrame([("2026-01-02", 2)], ["date", "v"])
 

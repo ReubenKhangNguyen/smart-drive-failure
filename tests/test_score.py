@@ -69,14 +69,14 @@ def test_run_keeps_previous_day_predictions_when_scoring_another_day(spark, tmp_
     assembler = VectorAssembler(inputCols=["f1", "f2"], outputCol="features")
     classifier = LogisticRegression(featuresCol="features", labelCol="fail_within_7_days", maxIter=20)
     model = Pipeline(stages=[assembler, classifier]).fit(train_df)
-    model_path = str(tmp_path / "model")
+    model_path = (tmp_path / "model").as_uri()
     model.save(model_path)
 
-    features_path = str(tmp_path / "features")
+    features_path = (tmp_path / "features").as_uri()
     rows = [_row("2026-02-01", "SN_A", 1.0, 1.0), _row("2026-02-02", "SN_B", 1.0, 1.0)]
     spark.createDataFrame(rows, COLUMNS).write.partitionBy("date").parquet(features_path)
 
-    predictions_path = str(tmp_path / "predictions")
+    predictions_path = (tmp_path / "predictions").as_uri()
     try:
         run(spark, features_path, model_path, predictions_path, "2026-02-01", 1, "vtest")
         run(spark, features_path, model_path, predictions_path, "2026-02-02", 1, "vtest")

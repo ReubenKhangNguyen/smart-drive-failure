@@ -5,7 +5,7 @@ import argparse
 from pyspark.sql import SparkSession
 
 from config.settings import load_config
-from pipeline.batch_pipeline import run_steps
+from pipeline.batch_pipeline import run_steps, write_run_report
 from pipeline.scoring_pipeline import build_steps
 
 
@@ -20,6 +20,7 @@ def main() -> int:
     steps = build_steps(spark, config, args.date)
     result = run_steps(steps)
     print("Scoring pipeline result:", result)
+    print("Run report:", write_run_report("scoring_pipeline", result))
     spark.stop()
     return 0 if result["status"] == "ok" else 1
 

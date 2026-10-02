@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import datetime as dt
 import time
-from typing import Any, Callable, Dict, List, Tuple
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from config.settings import enable_dynamic_overwrite, hdfs_uri
 
 PipelineStep = Tuple[str, Callable[[], Dict[str, Any]]]
+
+DEFAULT_REPORT_DIR = Path(__file__).resolve().parent.parent / "artifacts" / "reports"
+NOT_APPLICABLE = "không áp dụng"
 
 
 def run_steps(steps: List[PipelineStep]) -> Dict[str, Any]:
@@ -21,6 +26,52 @@ def run_steps(steps: List[PipelineStep]) -> Dict[str, Any]:
             return {"steps": log, "status": "failed", "failed_step": name}
         log.append({"step": name, "elapsed_seconds": round(time.time() - start, 2), "status": "ok", "result": result})
     return {"steps": log, "status": "ok"}
+
+
+def _rows_in_out(result: Optional[Dict[str, Any]]) -> Tuple[Any, Any]:
+    """Pick (rows_in, rows_out) out of a step result; None when the step reports neither."""
+    if not result:
+        return None, None
+    rows_in = result.get("rows_in")
+    rows_out = result.get("rows_out", result.get("rows", result.get("rows_scored")))
+    if rows_out is None and "distribution" in result:
+        rows_out = sum(result["distribution"].values())
+    return rows_in, rows_out
+
+
+def _fmt_rows(value: Any) -> str:
+    return NOT_APPLICABLE if value is None else "{:,}".format(value)
+
+
+def write_run_report(
+    pipeline_name: str,
+    run_result: Dict[str, Any],
+    report_dir: Optional[Path] = None,
+    run_date: Optional[str] = None,
+) -> Path:
+    """Append one section per pipeline run to artifacts/reports/pipeline_run_<ngày>.md:
+    step name, elapsed seconds, status, rows in/out (docs/ROADMAP.md Phase 7 DoD)."""
+    directory = Path(report_dir) if report_dir else DEFAULT_REPORT_DIR
+    day = run_date or dt.date.today().isoformat()
+    path = directory / "pipeline_run_{}.md".format(day)
+    directory.mkdir(parents=True, exist_ok=True)
+
+    lines = []
+    if not path.exists():
+        lines.append("# Nhật ký chạy pipeline — {}\n".format(day))
+    status = "thành công" if run_result["status"] == "ok" else "THẤT BẠI tại bước {}".format(run_result.get("failed_step"))
+    lines.append("\n## {} — {}\n".format(pipeline_name, status))
+    lines.append("| Bước | Thời gian (giây) | Trạng thái | Dòng vào | Dòng ra |")
+    lines.append("|---|---|---|---|---|")
+    for step in run_result["steps"]:
+        rows_in, rows_out = _rows_in_out(step.get("result"))
+        state = "ok" if step["status"] == "ok" else "lỗi: {}".format(step.get("error"))
+        lines.append("| {} | {} | {} | {} | {} |".format(
+            step["step"], step["elapsed_seconds"], state, _fmt_rows(rows_in), _fmt_rows(rows_out)
+        ))
+    with open(str(path), "a", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    return path
 
 
 def build_steps(spark, config: Dict[str, Any]) -> List[PipelineStep]:
@@ -51,6 +102,7 @@ def build_steps(spark, config: Dict[str, Any]) -> List[PipelineStep]:
     def step_features():
         enable_dynamic_overwrite(spark)
         silver_df = spark.read.parquet(silver_path)
+        rows_in = silver_df.count()
 
         labeled = build_labeled_dataset(silver_df, data_cfg["end_date"], config["project"]["horizon_days"])
         split_df = assign_split(
@@ -65,7 +117,7 @@ def build_steps(spark, config: Dict[str, Any]) -> List[PipelineStep]:
         cols = feature_columns(features_df)
         final_df = features_df.select("date", "serial_number", "model", *cols, "fail_within_7_days", "split")
         final_df.write.mode("overwrite").partitionBy("date").parquet(features_path)
-        return {"rows": final_df.count()}
+        return {"rows_in": rows_in, "rows_out": final_df.count()}
 
     return [
         ("silver_etl", step_silver),
