@@ -47,3 +47,17 @@ def conflict_note(health_level: Optional[str], alert: bool, k: int = 100) -> Tup
     if health_level == "WATCH" and not alert:
         return "info", "Luật xếp WATCH nhưng điểm rủi ro nằm ngoài Top-{}: tiếp tục theo dõi theo luật.".format(k)
     return None, None
+
+
+def tie_note(scores, k: int = 100) -> Optional[str]:
+    """Warning when most Top-K drives share the saturated top score (risk_score == 1.0): their order
+    is then only the tie-break (serial_number) and says nothing about relative risk."""
+    values = [float(v) for v in scores]
+    if not values:
+        return None
+    tied = sum(1 for v in values if v >= 1.0 - 1e-9)
+    if tied < len(values) / 2.0:
+        return None
+    return ("{} trong {} ổ của Top-{} có điểm rủi ro đúng bằng 1.0 (mô hình bão hòa). Thứ hạng giữa các ổ trùng điểm chỉ là "
+            "thứ tự phụ theo số serial, không phản ánh khác biệt rủi ro; có thể còn ổ khác cũng đạt 1.0 nhưng nằm ngoài "
+            "Top-{} chỉ vì thứ tự phụ này.".format(tied, len(values), k, k))

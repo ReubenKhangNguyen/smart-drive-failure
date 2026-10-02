@@ -6,6 +6,7 @@ from ui_dashboard import common
 COHORT_LABELS = {"healthy": "Ổ khỏe (ngày quan sát cuối)", "pre_failure": "Ổ hỏng (ngày trước khi hỏng)"}
 
 st.title("Phân tích chỉ số S.M.A.R.T.")
+common.show_provenance()
 st.caption("Đầu ra 1. Dữ liệu Silver 2026-Q1; bảng tổng hợp HĐ6.")
 
 st.subheader("Tỷ lệ hỏng hằng năm (AFR)")

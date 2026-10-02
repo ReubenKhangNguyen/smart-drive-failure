@@ -36,6 +36,7 @@ MODEL_LABELS = {
     "baseline_rules_v1": "Luật rules_v1 (baseline)",
 }
 HEALTH_ORDER = ["HEALTHY", "WATCH", "CRITICAL"]
+HEALTH_SHORT_LABELS = {"HEALTHY": "Khỏe", "WATCH": "Cần theo dõi", "CRITICAL": "Nguy hiểm"}
 HEALTH_LABELS = {"HEALTHY": "Khỏe (HEALTHY)", "WATCH": "Cần theo dõi (WATCH)", "CRITICAL": "Nguy hiểm (CRITICAL)"}
 
 # Ten cot hien thi. Khong dung chu "xac suat"/"probability": risk_score la diem rui ro, khong phai xac suat hieu chinh.

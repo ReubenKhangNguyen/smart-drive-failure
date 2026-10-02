@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 from streamlit.testing.v1 import AppTest
 
-PAGES_DIR = Path(__file__).resolve().parent.parent / "ui_dashboard" / "pages"
+PAGES_DIR = Path(__file__).resolve().parent.parent / "ui_dashboard" / "views"
 PAGE_FILES = ["overview", "smart_analysis", "data_analytics", "failure_prediction", "cluster_performance"]
 
 
@@ -137,6 +137,7 @@ def test_failure_prediction_leads_with_normal_segment_and_hides_full_test_recall
     assert "5.55" in text  # normal-segment recall@100 of the official model
     assert "44.44" not in text and "0.4444" not in text and "43.41" not in text  # full-test recall never shown
     assert "right-censoring" in text  # the tail explanation
+    assert "không được hiển thị" in text  # visible note that the full-test recall is withheld
     assert "288" in text
 
 
@@ -157,3 +158,52 @@ def test_cluster_performance_renders_latest_pipeline_run(empty_dirs):
 
     assert not at.exception
     assert any("37.91" in str(m.value) for m in at.markdown)
+
+
+def test_failure_prediction_warns_when_topk_scores_are_all_tied(empty_dirs):
+    dashboard, reports = empty_dirs
+    _fill(dashboard, reports)
+    topk = pd.read_parquet(str(dashboard / "predictions_topk.parquet"))
+    topk["risk_score"] = 1.0
+    topk.to_parquet(str(dashboard / "predictions_topk.parquet"), index=False)
+
+    at = _page("failure_prediction").run()
+
+    assert not at.exception
+    assert any("bão hòa" in str(w.value) for w in at.warning)
+
+
+@pytest.mark.parametrize("page", PAGE_FILES)
+def test_every_page_states_model_version_and_data_dates(empty_dirs, page):
+    _fill(*empty_dirs)
+
+    text = _texts(_page(page).run())
+
+    assert "Mô hình vtest" in text and "2026-01-01" in text and "2026-03-31" in text and "2026-03-24" in text
+
+
+def test_page_without_overview_says_provenance_is_unknown(empty_dirs):
+    text = _texts(_page("smart_analysis").run())
+
+    assert "không biết phiên bản mô hình" in text
+
+
+def test_no_page_scripts_in_a_pages_directory_so_deep_links_go_through_app_py():
+    # with a pages/ directory Streamlit runs a deep-linked page script directly, skipping app.py
+    legacy = PAGES_DIR.parent / "pages"
+    assert not legacy.exists() or not list(legacy.glob("*.py"))
+
+
+def test_app_router_declares_all_five_views():
+    source = (PAGES_DIR.parent / "app.py").read_text(encoding="utf-8")
+
+    for name in PAGE_FILES:
+        assert "views/{}.py".format(name) in source
+        assert (PAGES_DIR / (name + ".py")).exists()
+
+
+def test_failure_prediction_heading_has_no_placeholder_date_without_data(empty_dirs):
+    at = _page("failure_prediction").run()
+
+    assert not at.exception
+    assert any(sh.value == "Top-100 ổ có điểm rủi ro cao nhất" for sh in at.subheader)

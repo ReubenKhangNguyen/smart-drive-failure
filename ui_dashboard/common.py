@@ -31,3 +31,14 @@ def require(name: str) -> Optional[pd.DataFrame]:
 
 def pct(value: float, digits: int = 2) -> str:
     return "—" if value is None or pd.isna(value) else "{:.{d}f}%".format(value * 100, d=digits)
+
+
+def show_provenance() -> None:
+    """Every page states the model version and the data dates it is showing (.claude/rules/dashboard.md)."""
+    overview, _ = load("dashboard_overview")
+    if overview is None or not len(overview):
+        st.caption("Chưa có `dashboard_overview`: không biết phiên bản mô hình và ngày dữ liệu.")
+        return
+    row = overview.iloc[0]
+    st.caption("Mô hình {} | dữ liệu {} đến {} | ngày chấm điểm {}".format(
+        row["model_version"], row["data_start"], row["data_end"], row["scored_date"]))

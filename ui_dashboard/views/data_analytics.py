@@ -4,6 +4,7 @@ from ui_dashboard import common, data
 from ui_dashboard.explain import HEALTH_RULE_NOTE
 
 st.title("Tình trạng ổ cứng")
+common.show_provenance()
 st.caption("Đầu ra 2. Mỗi ổ được xếp Khỏe / Cần theo dõi / Nguy hiểm theo luật rules_v1, kèm lý do.")
 st.caption(HEALTH_RULE_NOTE)
 

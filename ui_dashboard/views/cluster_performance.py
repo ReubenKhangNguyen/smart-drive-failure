@@ -3,6 +3,7 @@ import streamlit as st
 from ui_dashboard import common, data
 
 st.title("Hiệu năng cụm")
+common.show_provenance()
 st.caption("Cụm Docker Compose: 1 NameNode, 3 DataNode, 1 Spark Master, 2 Spark Worker (cấu hình, không phải số đo).")
 
 st.subheader("Thời gian chạy các bước pipeline")
