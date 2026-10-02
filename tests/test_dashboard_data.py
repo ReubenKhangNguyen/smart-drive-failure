@@ -147,7 +147,8 @@ def test_conflict_notes_cover_each_combination_and_say_risk_score_not_probabilit
 def test_tie_note_warns_when_most_topk_scores_are_saturated_at_one():
     note = tie_note([1.0] * 9 + [0.99], 10)
 
-    assert "9 trong 10" in note and "thứ tự phụ" in note and "điểm rủi ro" in note
+    assert "9 trong 10" in note and "margin" in note and "điểm rủi ro" in note
+    assert "thứ tự phụ" not in note  # the pre-fix wording (tie-break by serial only) is gone
     assert "xác suất" not in note.lower()
     assert tie_note([0.9, 0.8, 0.7, 1.0], 4) is None  # a single saturated score is not a tie problem
     assert tie_note([], 10) is None

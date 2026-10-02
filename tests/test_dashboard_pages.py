@@ -170,7 +170,7 @@ def test_failure_prediction_warns_when_topk_scores_are_all_tied(empty_dirs):
     at = _page("failure_prediction").run()
 
     assert not at.exception
-    assert any("bão hòa" in str(w.value) for w in at.warning)
+    assert any("bão hòa" in str(w.value) and "margin" in str(w.value) for w in at.warning)
 
 
 @pytest.mark.parametrize("page", PAGE_FILES)

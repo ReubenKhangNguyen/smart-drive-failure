@@ -50,14 +50,15 @@ def conflict_note(health_level: Optional[str], alert: bool, k: int = 100) -> Tup
 
 
 def tie_note(scores, k: int = 100) -> Optional[str]:
-    """Warning when most Top-K drives share the saturated top score (risk_score == 1.0): their order
-    is then only the tie-break (serial_number) and says nothing about relative risk."""
+    """Note when most Top-K drives share the saturated top score (risk_score == 1.0). The displayed score
+    cannot tell them apart; their rank comes from the model margin (logit), then serial_number."""
     values = [float(v) for v in scores]
     if not values:
         return None
     tied = sum(1 for v in values if v >= 1.0 - 1e-9)
     if tied < len(values) / 2.0:
         return None
-    return ("{} trong {} ổ của Top-{} có điểm rủi ro đúng bằng 1.0 (mô hình bão hòa). Thứ hạng giữa các ổ trùng điểm chỉ là "
-            "thứ tự phụ theo số serial, không phản ánh khác biệt rủi ro; có thể còn ổ khác cũng đạt 1.0 nhưng nằm ngoài "
-            "Top-{} chỉ vì thứ tự phụ này.".format(tied, len(values), k, k))
+    return ("{} trong {} ổ của Top-{} có điểm rủi ro đúng bằng 1.0 (mô hình bão hòa), nên điểm hiển thị không phân biệt "
+            "được chúng. Thứ hạng giữa các ổ này được xếp theo margin của mô hình (logit, không hiển thị ở bảng), "
+            "rồi mới theo số serial nếu margin cũng bằng nhau. Ổ khác cũng đạt 1.0 nhưng margin thấp hơn có thể nằm "
+            "ngoài Top-{}.".format(tied, len(values), k, k))
