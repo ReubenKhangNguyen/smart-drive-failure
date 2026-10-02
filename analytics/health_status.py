@@ -8,6 +8,7 @@ from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 
 from analytics.smart_analysis import failure_dates
+from config.settings import enable_dynamic_overwrite
 
 RULES_VERSION = "rules_v1"
 
@@ -116,6 +117,7 @@ def baseline_failure_rate_by_level(silver_df: DataFrame, health_df: DataFrame, d
 
 
 def run(spark: SparkSession, silver_path: str, health_status_path: str) -> Dict[str, object]:
+    enable_dynamic_overwrite(spark)
     silver_df = spark.read.parquet(silver_path)
     health_df = classify_health(silver_df)
 
