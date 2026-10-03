@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-labelledby="t d">
+  <title id="t">SMART Drive Failure Prediction</title>
+  <desc id="d">Banner: S.M.A.R.T. analytics and 7-day hard-drive failure prediction with Apache Spark, HDFS, Kafka, Airflow and Streamlit.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="0.55" stop-color="#14306b"/>
+      <stop offset="1" stop-color="#0e7490"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+    <linearGradient id="pulse" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0"/>
+      <stop offset="0.25" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1280" height="320" rx="18" fill="url(#bg)"/>
+  <rect width="1280" height="320" rx="18" fill="url(#grid)"/>
+
+  <!-- hard-drive icon -->
+  <g transform="translate(70 70)">
+    <rect width="180" height="180" rx="22" fill="#0b1220" stroke="url(#accent)" stroke-width="4"/>
+    <circle cx="90" cy="90" r="62" fill="#111c33" stroke="#334155" stroke-width="3"/>
+    <circle cx="90" cy="90" r="40" fill="none" stroke="#22d3ee" stroke-opacity="0.5" stroke-width="2"/>
+    <circle cx="90" cy="90" r="14" fill="url(#accent)"/>
+    <path d="M90 90 L150 42" stroke="#e2e8f0" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="152" cy="40" r="7" fill="#e2e8f0"/>
+    <circle cx="28" cy="28" r="6" fill="#4ade80"/>
+  </g>
+
+  <!-- title -->
+  <text x="300" y="125" font-family="'Segoe UI', Helvetica, Arial, sans-serif" font-size="52" font-weight="800" fill="#ffffff">SMART Drive Failure Prediction</text>
+  <text x="302" y="172" font-family="'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" fill="#cbd5e1">S.M.A.R.T. analytics + 7-day failure prediction on 30.6 M drive-days</text>
+
+  <!-- technology chips -->
+  <g font-family="'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="600" text-anchor="middle" fill="#e2e8f0">
+    <rect x="300" y="204" width="100" height="34" rx="17" fill="#ffffff" fill-opacity="0.12" stroke="#ffffff" stroke-opacity="0.25"/>
+    <text x="350" y="227">Spark</text>
+    <rect x="414" y="204" width="90" height="34" rx="17" fill="#ffffff" fill-opacity="0.12" stroke="#ffffff" stroke-opacity="0.25"/>
+    <text x="459" y="227">HDFS</text>
+    <rect x="518" y="204" width="100" height="34" rx="17" fill="#ffffff" fill-opacity="0.12" stroke="#ffffff" stroke-opacity="0.25"/>
+    <text x="568" y="227">Kafka</text>
+    <rect x="632" y="204" width="110" height="34" rx="17" fill="#ffffff" fill-opacity="0.12" stroke="#ffffff" stroke-opacity="0.25"/>
+    <text x="687" y="227">Airflow</text>
+    <rect x="756" y="204" width="100" height="34" rx="17" fill="#ffffff" fill-opacity="0.12" stroke="#ffffff" stroke-opacity="0.25"/>
+    <text x="806" y="227">MLlib</text>
+    <rect x="870" y="204" width="125" height="34" rx="17" fill="#ffffff" fill-opacity="0.12" stroke="#ffffff" stroke-opacity="0.25"/>
+    <text x="932" y="227">Streamlit</text>
+  </g>
+
+  <!-- heartbeat line -->
+  <path d="M300 288 H640 L664 288 L684 258 L708 316 L730 272 L746 288 H1230" fill="none" stroke="url(#pulse)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
