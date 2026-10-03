@@ -72,22 +72,7 @@
 
 ## 🏗 Kiến trúc
 
-```mermaid
-flowchart LR
-    SRC["Backblaze<br/>CSV"]:::src --> BR[("Bronze")]:::bronze --> SI[("Silver")]:::silver
-    SI --> GF[("Gold<br/>features")]:::gold --> ML["Spark<br/>MLlib"]:::ml --> GP[("Gold<br/>predictions")]:::gold --> UI["Streamlit<br/>dashboard"]:::ui
-    SI --> GA[("Gold analytics<br/>+ health_status")]:::gold --> UI
-    KF["Kafka<br/>demo"]:::demo -.-> SS["Structured<br/>Streaming"]:::demo -.-> OUT[("streaming_output<br/>chỉ để demo")]:::demo
-    AF["Airflow<br/>DAG"]:::orch -.->|điều phối| SI
-    classDef src fill:#e2e8f0,stroke:#64748b,color:#0f172a
-    classDef bronze fill:#b45309,stroke:#78350f,color:#ffffff
-    classDef silver fill:#94a3b8,stroke:#475569,color:#0f172a
-    classDef gold fill:#f59e0b,stroke:#b45309,color:#0f172a
-    classDef ml fill:#7c3aed,stroke:#4c1d95,color:#ffffff
-    classDef ui fill:#0891b2,stroke:#155e75,color:#ffffff
-    classDef demo fill:#e5e7eb,stroke:#9ca3af,color:#374151
-    classDef orch fill:#16a34a,stroke:#166534,color:#ffffff
-```
+<p align="center"><img src="docs/images/architecture_vi.svg" alt="Kiến trúc: CSV Backblaze vào các lớp Bronze, Silver, Gold trên HDFS, Spark MLlib chấm điểm và dashboard Streamlit; Airflow DAG điều phối batch pipeline và demo Kafka chạy song song" width="100%"></p>
 
 > [!IMPORTANT]
 > Batch pipeline (Bronze → Silver → Gold) là nguồn cho phân tích và huấn luyện. Kafka chỉ là lớp **trình diễn** gần thời gian thực bổ sung, không thay thế batch pipeline.
