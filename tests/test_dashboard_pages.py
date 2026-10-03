@@ -89,6 +89,14 @@ def _fill(dashboard, reports):
     _w(dashboard, "kmeans_k_selection", pd.DataFrame({"k": [3, 4], "silhouette": [0.68, 0.64], "wssse": [48490.0, 40976.0],
                                                         "is_selected": [True, False]}))
     _w(dashboard, "kmeans_health_crosstab", pd.DataFrame({"cluster_id": [0, 1], "health_level": ["HEALTHY", "CRITICAL"], "drives": [100, 10]}))
+    _w(dashboard, "benchmark", pd.DataFrame({
+        "experiment": ["format", "format", "pipeline_steps"], "variant": ["csv_7d", "silver_parquet_7d", "batch_pipeline/silver_etl"],
+        "query": ["count+groupBy(model)", "count+groupBy(model)", "pipeline step"], "runs": [3, 3, 1],
+        "median_seconds": [40.0, 4.0, 269.35], "min_seconds": [39.0, 3.5, 269.35], "max_seconds": [41.0, 4.5, 269.35],
+        "size_bytes": [930 * 1048576, 20 * 1048576, None], "file_count": [7, 7, None], "input_partitions": [14, 7, None],
+        "executors": [2, 2, None], "rows": [3000000, 3000000, None], "note": ["", "", "1 lần, không phải trung vị"]}).astype(
+        {"size_bytes": "float64", "file_count": "float64", "input_partitions": "float64", "executors": "float64", "rows": "float64"}))
+    _w(dashboard, "benchmark_environment", pd.DataFrame({"item": ["host_ram_gb", "docker_ncpu"], "value": ["15.2", "12"]}))
     (reports / "pipeline_run_2026-10-02.md").write_text("# Nhật ký chạy pipeline — 2026-10-02\n\n| Bước | Thời gian |\n|---|---|\n| score | 37.91 |\n", encoding="utf-8")
 
 
@@ -242,3 +250,27 @@ def test_failure_prediction_notes_that_missing_flags_may_reflect_drive_type(empt
     text = _texts(_page("failure_prediction").run())
 
     assert "smart_187_raw_is_missing" in text and "loại hoặc dòng ổ" in text
+
+
+def test_cluster_performance_shows_benchmark_tables_notes_and_environment(empty_dirs):
+    _fill(*empty_dirs)
+
+    at = _page("cluster_performance").run()
+    text = _texts(at)
+    columns = {c for frame in at.dataframe for c in frame.value.columns}
+
+    assert not at.exception
+    assert "Trung vị (s)" in columns and "Mục" in columns
+    assert "Định dạng: CSV so với Parquet" in text and "csv_7d" in text and "host_ram_gb" in text
+    assert "1 lần, không phải trung vị" in text and "bộ nhớ đệm" in text
+    assert "930.0" in text  # size shown in MB
+    assert "Min–Max (s)" in columns and "Ghi chú" in columns  # the notes column is present, not cut off
+    assert len(at.get("arrow_vega_lite_chart")) == 1  # only the multi-row experiment (format) gets a chart
+
+
+def test_cluster_performance_without_benchmark_points_to_the_runner(empty_dirs):
+    at = _page("cluster_performance").run()
+
+    hints = " ".join(str(i.value) for i in at.info)
+    assert not at.exception and "scripts/run_benchmark.py" in hints
+

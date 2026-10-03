@@ -27,7 +27,8 @@ TABLES: Dict[str, Tuple[str, str]] = {
     "smart_history_topk": (EXPORT_JOB, "HĐ8"),
     "model_metrics": (EXPORT_JOB, "HĐ8"),
     "model_feature_importance": (EXPORT_JOB, "HĐ8"),
-    "benchmark": ("analytics/benchmark.py (Phase 9, chưa làm)", "Phase 9"),
+    "benchmark": ("scripts/run_benchmark.py (rồi scripts/build_benchmark_report.py)", "HĐ9"),
+    "benchmark_environment": ("scripts/run_benchmark.py (rồi scripts/build_benchmark_report.py)", "HĐ9"),
 }
 
 MODEL_LABELS = {
@@ -181,3 +182,53 @@ def style_metrics(df: pd.DataFrame) -> pd.DataFrame:
         decimals = 4 if "AUC" in column else 2
         out[column] = out[column].map(lambda v, d=decimals: "—" if pd.isna(v) else "{:.{d}f}".format(float(v), d=d))
     return out
+
+
+BENCHMARK_TITLES = {
+    "format": "Định dạng: CSV so với Parquet",
+    "workers": "Số worker: 1 so với 2",
+    "small_files": "File nhỏ: Gold features gốc so với bản gộp",
+    "pipeline_steps": "Thời gian từng bước pipeline (từ nhật ký đã có)",
+}
+
+
+def _fmt(value: Any, spec: str) -> str:
+    return "—" if value is None or pd.isna(value) else spec.format(value)
+
+
+def benchmark_label(variant: str, query: str) -> str:
+    """Row/bar label: the variant, plus the workload when the query names one (`... @ csv_7d`)."""
+    return "{} @ {}".format(variant, query.split("@", 1)[1].strip()) if "@" in str(query) else str(variant)
+
+
+def benchmark_chart_frame(part: pd.DataFrame) -> pd.DataFrame:
+    """Rows of one experiment with a unique `label` (two workloads of one variant must not share a bar)."""
+    out = part.copy()
+    out["label"] = [benchmark_label(v, q) for v, q in zip(out["variant"], out["query"])]
+    return out
+
+
+def benchmark_views(benchmark: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+    """experiment -> display table (strings, an em dash for missing values), in the order of BENCHMARK_TITLES.
+    Columns that are empty for a whole experiment are dropped so nothing is cut off on the right."""
+    views = {}  # type: Dict[str, pd.DataFrame]
+    for experiment in BENCHMARK_TITLES:
+        part = benchmark[benchmark["experiment"] == experiment]
+        if part.empty:
+            continue
+        views[experiment] = pd.DataFrame({
+            "Biến thể": [benchmark_label(v, q) for v, q in zip(part["variant"], part["query"])],
+            "Lần": [_fmt(v, "{:.0f}") for v in part["runs"]],
+            "Trung vị (s)": [_fmt(v, "{:.2f}") for v in part["median_seconds"]],
+            "Min–Max (s)": ["{:.2f}–{:.2f}".format(lo, hi) for lo, hi in zip(part["min_seconds"], part["max_seconds"])],
+            "MB": [_fmt(None if pd.isna(v) else v / 1048576.0, "{:.1f}") for v in part["size_bytes"]],
+            "File": [_fmt(v, "{:,.0f}") for v in part["file_count"]],
+            "Partition": [_fmt(v, "{:.0f}") for v in part["input_partitions"]],
+            "Executor": [_fmt(v, "{:.0f}") for v in part["executors"]],
+            "Số dòng": [_fmt(v, "{:,.0f}") for v in part["rows"]],
+            "Ghi chú": [v if isinstance(v, str) and v else "—" for v in part["note"]],
+        })
+        # drop columns that are empty ("—") for every row of this experiment, so the useful ones are not squeezed/cut off
+        keep = [c for c in views[experiment].columns if c == "Biến thể" or (views[experiment][c] != "—").any()]
+        views[experiment] = views[experiment][keep].reset_index(drop=True)
+    return views

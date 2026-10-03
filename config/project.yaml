@@ -15,6 +15,7 @@ hdfs:
   models_base: "/smart-drive/models"
   streaming_output: "/smart-drive/streaming_output"
   streaming_checkpoint: "/smart-drive/streaming_checkpoint"
+  benchmark_tmp: "/smart-drive/benchmark_tmp"
   bronze_replication: 1
   silver_replication: 2
   gold_replication: 2

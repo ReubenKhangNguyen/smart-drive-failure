@@ -1,3 +1,4 @@
+import altair as alt
 import streamlit as st
 
 from ui_dashboard import common, data
@@ -15,6 +16,29 @@ else:
     st.info("Chưa có nhật ký chạy. Chạy `spark-submit scripts/run_batch_pipeline.py` để sinh `artifacts/reports/pipeline_run_<ngày>.md`.")
 
 st.subheader("Benchmark Big Data")
+st.caption(
+    "Mỗi biến thể đo 1 lần khởi động không tính rồi 3 lần tính trung vị (xen kẽ giữa các biến thể), với bộ nhớ đệm hệ điều hành "
+    "đã ấm; dòng có Lần = 1 là một lần chạy duy nhất, không phải trung vị. Số đo chạy trên một laptop với Docker, không đại diện "
+    "cho cụm thật.")
 benchmark = common.require("benchmark")
-if benchmark is not None:
-    st.dataframe(benchmark, use_container_width=True, hide_index=True)
+if benchmark is not None and len(benchmark):
+    for experiment, table in data.benchmark_views(benchmark).items():
+        st.markdown("**{}**".format(data.BENCHMARK_TITLES[experiment]))
+        st.dataframe(table, use_container_width=True, hide_index=True,
+                     column_config={"Ghi chú": st.column_config.TextColumn("Ghi chú", width="large")})
+        part = data.benchmark_chart_frame(benchmark[benchmark["experiment"] == experiment])
+        if len(part) > 1:
+            log_scale = experiment == "format"
+            st.altair_chart(
+                alt.Chart(part).mark_bar().encode(
+                    y=alt.Y("label:N", sort="-x", title=None, axis=alt.Axis(labelLimit=360)),
+                    x=alt.X("median_seconds:Q", title="Trung vị (giây)" + (", thang symlog" if log_scale else ""),
+                            scale=alt.Scale(type="symlog") if log_scale else alt.Scale()),
+                    tooltip=["label", "runs", "median_seconds", "min_seconds", "max_seconds"],
+                ),
+                use_container_width=True,
+            )
+    environment = common.require("benchmark_environment")
+    if environment is not None and len(environment):
+        st.markdown("**Cấu hình máy và cụm lúc đo**")
+        st.dataframe(environment.rename(columns={"item": "Mục", "value": "Giá trị"}), use_container_width=True, hide_index=True)
