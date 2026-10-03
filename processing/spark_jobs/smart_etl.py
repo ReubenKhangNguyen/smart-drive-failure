@@ -70,11 +70,30 @@ def infer_manufacturer(df: DataFrame) -> DataFrame:
     return df.withColumn("manufacturer", expr)
 
 
-def clean_and_align(df: DataFrame) -> Tuple[DataFrame, Dict[str, Any]]:
-    """Select/cast Bronze raw columns to the HD1 Silver schema, null out negative
-    capacity, infer manufacturer, and de-duplicate by (serial_number, date)."""
-    stats: Dict[str, Any] = {"rows_in": df.count()}
+SILVER_COLUMN_ORDER = [
+    "date",
+    "serial_number",
+    "model",
+    "manufacturer",
+    "capacity_bytes",
+    "failure",
+    "smart_5_raw",
+    "smart_9_raw",
+    "smart_187_raw",
+    "smart_188_raw",
+    "smart_194_raw",
+    "smart_197_raw",
+    "smart_198_raw",
+    "smart_199_raw",
+]
 
+
+def cast_and_clean_columns(df: DataFrame) -> DataFrame:
+    """Select/cast Bronze raw columns to the HD1 Silver schema, null out negative
+    capacity, infer manufacturer. No aggregation or dedup — safe to reuse on both a
+    batch DataFrame (smart_etl.clean_and_align) and a Structured Streaming
+    DataFrame (pipeline/streaming_consumer.py), since streaming doesn't support the
+    windowed dedup step below."""
     df = ensure_required_columns(df)
     df = df.select(*REQUIRED_RAW_COLUMNS)
 
@@ -89,30 +108,24 @@ def clean_and_align(df: DataFrame) -> Tuple[DataFrame, Dict[str, Any]]:
         df = df.withColumn(col_name, F.col(col_name).cast(DoubleType()))
 
     df = infer_manufacturer(df)
+    return df.select(*SILVER_COLUMN_ORDER)
+
+
+def clean_and_align(df: DataFrame) -> Tuple[DataFrame, Dict[str, Any]]:
+    """Batch-only: cast_and_clean_columns() plus de-duplication by (serial_number,
+    date) and row-count stats (both require actions/aggregation, unsupported on a
+    streaming DataFrame)."""
+    stats: Dict[str, Any] = {"rows_in": df.count()}
+
+    clean_df = cast_and_clean_columns(df)
 
     window = Window.partitionBy("serial_number", "date").orderBy(F.lit(1))
-    df = df.withColumn("_rn", F.row_number().over(window)).where(F.col("_rn") == 1).drop("_rn")
+    clean_df = clean_df.withColumn("_rn", F.row_number().over(window)).where(F.col("_rn") == 1).drop("_rn")
 
-    stats["rows_out"] = df.count()
+    stats["rows_out"] = clean_df.count()
     stats["duplicates_removed"] = stats["rows_in"] - stats["rows_out"]
 
-    column_order = [
-        "date",
-        "serial_number",
-        "model",
-        "manufacturer",
-        "capacity_bytes",
-        "failure",
-        "smart_5_raw",
-        "smart_9_raw",
-        "smart_187_raw",
-        "smart_188_raw",
-        "smart_194_raw",
-        "smart_197_raw",
-        "smart_198_raw",
-        "smart_199_raw",
-    ]
-    return df.select(*column_order), stats
+    return clean_df, stats
 
 
 def run(spark: SparkSession, bronze_path: str, silver_path: str) -> Dict[str, Any]:

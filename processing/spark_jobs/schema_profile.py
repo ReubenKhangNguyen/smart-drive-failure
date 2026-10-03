@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import argparse
 from dataclasses import dataclass, field
 from typing import Dict, List
 
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
+
+from config.settings import hdfs_uri, load_config
 
 
 def list_csv_files(spark: SparkSession, dir_path: str) -> List[str]:
@@ -68,3 +71,39 @@ def null_rate_report(df: DataFrame, columns: List[str]) -> Dict[str, float]:
     agg_exprs = [F.sum(F.when(F.col(c).isNull(), 1).otherwise(0)).alias(c) for c in columns]
     row = df.select(*agg_exprs).collect()[0]
     return {c: row[c] / total for c in columns}
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Liet ke cot va phat hien schema drift tren thu muc Bronze CSV")
+    parser.add_argument(
+        "--dir",
+        default=hdfs_uri(load_config(), "bronze"),
+        help="Duong dan HDFS hoac local toi thu muc chua CSV (mac dinh: Bronze trong config/project.yaml)",
+    )
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+
+    spark = SparkSession.builder.appName("smart-schema-profile").getOrCreate()
+    profile = profile_schema(spark, args.dir)
+
+    print("Tong so file:", profile.file_count)
+    print("Cot tham chieu ({}):".format(len(profile.reference_columns)))
+    for col_name in profile.reference_columns:
+        print(" -", col_name)
+
+    if profile.drifted_files:
+        print("File co schema drift:")
+        for file_name, diff in profile.drifted_files.items():
+            print(" -", file_name, ":", diff)
+    else:
+        print("Khong phat hien schema drift.")
+
+    spark.stop()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

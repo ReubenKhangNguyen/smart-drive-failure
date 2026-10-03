@@ -123,6 +123,35 @@ docker compose exec namenode ls /external_data
 
 Script nạp HDFS (`ingestion/hdfs_loader.py`, Phase 2) đọc từ đường dẫn mount này thay vì `dataset/raw/` trong repo.
 
+## 7. Demo streaming Kafka (Phase 2.b, bước 8 của giảng viên)
+
+Mô phỏng luồng SMART hằng ngày: dòng CSV Bronze → Kafka → Spark Structured Streaming (dùng đúng `cast_and_clean_columns` của batch) → Parquet ở `/smart-drive/streaming_output/<run_id>`. **Batch pipeline (Bronze → Silver → Gold) vẫn là nguồn chính cho phân tích và huấn luyện**; Kafka chỉ là lớp trình diễn bổ sung và không thay batch.
+
+Chạy **đúng 1 ngày** dữ liệu (2026-01-01, 338,760 dòng). Message chỉ gồm 13 cột consumer dùng (~314 byte; gửi cả 197 cột là ~4,885 byte, tức 1.65 GB mỗi ngày) và phát theo lô (mặc định 2,000 message mỗi 0.2 giây), không phải mỗi dòng một lần nghỉ.
+
+RAM là giới hạn (Docker 7.36 GiB): đóng ứng dụng nặng trên máy host, cắm sạc, tắt chế độ ngủ, dừng dashboard (`docker compose stop ui-dashboard`, không xóa gì) và không chạy job Spark khác. Script tự dừng nếu master Spark đang có ứng dụng khác. Kafka và ZooKeeper dùng `KAFKA_HEAP_OPTS` (ZooKeeper `-Xmx256m`, Kafka `-Xmx512m`).
+
+Producer chạy trên host, cần `kafka-python==3.0.11` (bản 2.0.2 không import được trên Python 3.12+). Cài vào venv tạm, không cài vào Python toàn cục:
+
+```bash
+python -m venv .venv-kafka                               # thư mục này không được commit
+.venv-kafka/Scripts/python -m pip install -r requirements-streaming.txt    # Linux/macOS: .venv-kafka/bin/python
+# kiểm tra nhanh: bật Kafka, gửi 1 message từ host rồi thoát
+.venv-kafka/Scripts/python scripts/run_streaming_demo.py --host-source-dir "C:/dataset_smart_drive_failure/data_Q1_2026/data_Q1_2026" --start-kafka --probe-only
+# chạy demo đầy đủ (mỗi lần một run_id, topic, output và checkpoint mới); báo cáo: artifacts/reports/streaming_demo.md
+.venv-kafka/Scripts/python scripts/run_streaming_demo.py --host-source-dir "C:/dataset_smart_drive_failure/data_Q1_2026/data_Q1_2026" --dates 2026-01-01 --start-kafka --stop-kafka
+```
+
+Producer trên host kết nối tới `127.0.0.1:9092` (không dùng `localhost`: trên Windows `localhost` phân giải ra `::1` trước, trong khi cổng chỉ được publish trên loopback IPv4, nên kết nối bị từ chối).
+
+Nếu producer trên host lỗi, thêm `--producer-mode container`: producer chạy trong container tạm `python:3.11-slim` trên mạng compose (CSV và repo mount chỉ đọc).
+
+`pipeline/streaming_consumer.py` dùng connector `org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1` qua `--packages` (cần mạng). Trong image Spark thư mục `/home/spark` không tồn tại nên Ivy mặc định lỗi `FileNotFoundException`; script thêm `--conf spark.jars.ivy=/tmp/.ivy2` (lần đầu tải ~57 MB).
+
+Báo cáo ghi: số message producer gửi và broker xác nhận, số dòng consumer đọc, số dòng Parquet ở `streaming_output`, đối chiếu với phân vùng Silver cùng ngày (số dòng, số serial, tổng `failure`), các micro-batch, thời gian và RAM thật (`docker stats`).
+
+`--stop-kafka` chỉ dừng hai container `zookeeper` và `kafka` (`docker compose --profile streaming stop zookeeper kafka`; không xóa container hay volume). **Luôn ghi tên service**: `docker compose --profile streaming stop` không kèm tên sẽ dừng cả HDFS và Spark. `streaming_output/<run_id>` và `streaming_checkpoint/<run_id>` trên HDFS, cùng volume dữ liệu của Kafka/ZooKeeper, **không tự xóa**; chỉ dọn thủ công khi nhóm đồng ý.
+
 ## Dừng hệ thống
 
 ```bash
