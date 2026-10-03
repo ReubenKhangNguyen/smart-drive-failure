@@ -3,11 +3,11 @@
 </p>
 
 <p align="center">
-  <img alt="Apache Spark" src="https://img.shields.io/badge/Apache%20Spark-3.5.1-E25A1C?style=for-the-badge&logo=apachespark&logoColor=white">
-  <img alt="HDFS" src="https://img.shields.io/badge/HDFS-Hadoop%203.2.1-FFCC00?style=for-the-badge&logo=apachehadoop&logoColor=black">
-  <img alt="Kafka" src="https://img.shields.io/badge/Kafka-7.6.1-231F20?style=for-the-badge&logo=apachekafka&logoColor=white">
-  <img alt="Airflow" src="https://img.shields.io/badge/Airflow-2.10.5-017CEE?style=for-the-badge&logo=apacheairflow&logoColor=white">
-  <img alt="Streamlit" src="https://img.shields.io/badge/Streamlit-1.38-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white">
+  <img alt="Apache Spark" src="https://img.shields.io/badge/Apache%20Spark-3.5.1-E25A1C?style=flat-square&logo=apachespark&logoColor=white">
+  <img alt="HDFS" src="https://img.shields.io/badge/HDFS-Hadoop%203.2.1-FFCC00?style=flat-square&logo=apachehadoop&logoColor=black">
+  <img alt="Kafka" src="https://img.shields.io/badge/Kafka-7.6.1-231F20?style=flat-square&logo=apachekafka&logoColor=white">
+  <img alt="Airflow" src="https://img.shields.io/badge/Airflow-2.10.5-017CEE?style=flat-square&logo=apacheairflow&logoColor=white">
+  <img alt="Streamlit" src="https://img.shields.io/badge/Streamlit-1.38-FF4B4B?style=flat-square&logo=streamlit&logoColor=white">
 </p>
 <p align="center">
   <img alt="Docker Compose" src="https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white">
@@ -72,27 +72,7 @@
 
 ## 🏗 Kiến trúc
 
-```mermaid
-flowchart LR
-    SRC["Backblaze CSV<br/>2026-Q1"]:::src --> BR[("Bronze<br/>CSV gốc, bất biến")]:::bronze
-    BR --> SI[("Silver<br/>Parquet đã làm sạch")]:::silver
-    SI --> GF[("Gold<br/>features")]:::gold
-    SI --> GA[("Gold<br/>analytics + health_status")]:::gold
-    GF --> ML["Spark MLlib<br/>huấn luyện, đánh giá, chấm điểm"]:::ml
-    ML --> GP[("Gold<br/>predictions")]:::gold
-    GA --> UI["Streamlit<br/>dashboard"]:::ui
-    GP --> UI
-    KF["Demo Kafka<br/>một ngày dữ liệu"]:::demo -.-> SS["Structured Streaming<br/>dùng lại mã làm sạch"]:::demo -.-> OUT[("streaming_output<br/>chỉ để demo")]:::demo
-    AF["Airflow DAG"]:::orch -.->|điều phối| SI
-    classDef src fill:#e2e8f0,stroke:#64748b,color:#0f172a
-    classDef bronze fill:#b45309,stroke:#78350f,color:#ffffff
-    classDef silver fill:#94a3b8,stroke:#475569,color:#0f172a
-    classDef gold fill:#f59e0b,stroke:#b45309,color:#0f172a
-    classDef ml fill:#7c3aed,stroke:#4c1d95,color:#ffffff
-    classDef ui fill:#0891b2,stroke:#155e75,color:#ffffff
-    classDef demo fill:#e5e7eb,stroke:#9ca3af,color:#374151
-    classDef orch fill:#16a34a,stroke:#166534,color:#ffffff
-```
+<p align="center"><img src="docs/images/architecture_vi.svg" alt="Kiến trúc: CSV Backblaze vào các lớp Bronze, Silver, Gold trên HDFS, Spark MLlib chấm điểm và dashboard Streamlit; Airflow DAG điều phối batch pipeline và demo Kafka chạy song song" width="100%"></p>
 
 > [!IMPORTANT]
 > Batch pipeline (Bronze → Silver → Gold) là nguồn cho phân tích và huấn luyện. Kafka chỉ là lớp **trình diễn** gần thời gian thực bổ sung, không thay thế batch pipeline.
