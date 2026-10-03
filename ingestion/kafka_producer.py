@@ -121,7 +121,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Phat tung dong CSV Bronze vao Kafka (13 cot, phat theo lo) de mo phong luong SMART")
     parser.add_argument("--host-source-dir", required=True, help="Thu muc chua CSV, vd C:/dataset_smart_drive_failure/data_Q1_2026/data_Q1_2026")
     parser.add_argument("--dates", nargs="+", required=True, help="Vd 2026-01-01")
-    parser.add_argument("--bootstrap-servers", default="localhost:9092")
+    parser.add_argument("--bootstrap-servers", default="127.0.0.1:9092")  # IPv4 literal: see docker-compose.yml
     parser.add_argument("--topic", default="smart-events")
     parser.add_argument("--batch-size", type=int, default=2000, help="so message moi lo")
     parser.add_argument("--batch-delay", type=float, default=0.2, help="giay nghi sau moi lo")

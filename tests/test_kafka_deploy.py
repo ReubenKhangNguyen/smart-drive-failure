@@ -31,6 +31,20 @@ def test_heap_options_use_the_variable_the_images_actually_read():
     assert services["kafka"]["environment"]["KAFKA_HEAP_OPTS"] == "-Xmx512m -Xms256m"
 
 
+def test_the_broker_advertises_the_ipv4_loopback_not_localhost():
+    # measured on this Windows host: localhost -> ::1 first, the port is published on 127.0.0.1 only, so ::1 was refused
+    advertised = _services()["kafka"]["environment"]["KAFKA_ADVERTISED_LISTENERS"]
+
+    assert "PLAINTEXT_HOST://127.0.0.1:9092" in advertised and "localhost" not in advertised
+    assert "PLAINTEXT://kafka:29092" in advertised  # containers keep using the internal listener
+
+
+def test_host_side_defaults_use_the_ipv4_loopback():
+    for path in ("ingestion/kafka_producer.py", "scripts/run_streaming_demo.py"):
+        text = (ROOT / path).read_text(encoding="utf-8")
+        assert 'default="127.0.0.1:9092"' in text and 'default="localhost:9092"' not in text, path
+
+
 def test_kafka_port_is_published_on_localhost_only_and_images_are_pinned():
     services = _services()
 
@@ -65,6 +79,7 @@ def test_quick_start_documents_the_demo_honestly():
     text = (ROOT / "docs" / "quick-start.md").read_text(encoding="utf-8")
     section = text[text.index("## 7. Demo streaming Kafka"):text.index("## Dừng hệ thống")]
 
+    assert "stop zookeeper kafka" in section and "không kèm tên sẽ dừng cả HDFS và Spark" in section
     for must in ("spark.jars.ivy=/tmp/.ivy2", "--probe-only", "--producer-mode container", "requirements-streaming.txt",
                  "không tự xóa", "338,760", "không thay batch", "KAFKA_HEAP_OPTS", ".venv-kafka"):
         assert must in section, must

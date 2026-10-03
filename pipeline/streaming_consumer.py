@@ -128,7 +128,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Spark Structured Streaming: Kafka -> streaming_output/<run_id> (demo)")
     parser.add_argument("--kafka-bootstrap", default="kafka:29092")
     parser.add_argument("--topic", default="smart-events")
-    parser.add_argument("--run-id", default=dt.datetime.utcnow().strftime("%Y%m%d%H%M%S"))
+    parser.add_argument("--run-id", default=dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d%H%M%S"))
     parser.add_argument("--output-path", help="mac dinh: streaming_output trong config + /<run-id>")
     parser.add_argument("--checkpoint-path", help="mac dinh: streaming_checkpoint trong config + /<run-id>")
     parser.add_argument("--max-offsets-per-trigger", type=int, default=50000)

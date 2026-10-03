@@ -6,7 +6,7 @@ Runs on the HOST (standard library; the producer also needs kafka-python, see re
     python scripts/run_streaming_demo.py --host-source-dir "C:/dataset_smart_drive_failure/data_Q1_2026/data_Q1_2026" \
         --dates 2026-01-01 --start-kafka --stop-kafka
 
-Nothing is deleted: --stop-kafka only runs `docker compose --profile streaming stop`; streaming_output/streaming_checkpoint
+Nothing is deleted: --stop-kafka only stops the zookeeper and kafka containers (never HDFS or Spark); streaming_output/streaming_checkpoint
 for the run stay on HDFS until someone decides to clean them.
 """
 from __future__ import annotations
@@ -33,6 +33,8 @@ from pipeline.streaming_demo import (  # noqa: E402
     list_topics_command,
     parse_summary_line,
     producer_container_command,
+    start_streaming_command,
+    stop_streaming_command,
 )
 from pipeline.streaming_report import format_report, memory_summary, total_mib  # noqa: E402
 
@@ -53,7 +55,7 @@ def kafka_ready() -> bool:
 
 def start_kafka(wait_seconds: float = 180.0) -> None:
     print("Starting zookeeper and kafka (profile streaming) ...", flush=True)
-    done = _run(["docker", "compose", "--profile", "streaming", "up", "-d", "zookeeper", "kafka"])
+    done = _run(start_streaming_command())
     if done.returncode != 0:
         raise RuntimeError("docker compose up failed:\n" + done.stdout[-1500:])
     deadline = time.time() + wait_seconds
@@ -122,9 +124,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Demo Kafka + Spark Structured Streaming (buoc 8), 1 ngay du lieu, co bao cao bang chung")
     parser.add_argument("--host-source-dir", required=True, help="Thu muc chua CSV, vd C:/dataset_smart_drive_failure/data_Q1_2026/data_Q1_2026")
     parser.add_argument("--dates", nargs="+", default=["2026-01-01"])
-    parser.add_argument("--run-id", default=dt.datetime.utcnow().strftime("%Y%m%d%H%M%S"))
+    parser.add_argument("--run-id", default=dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d%H%M%S"))
     parser.add_argument("--topic", help="mac dinh: smart-events-<run-id> (moi lan chay mot topic moi)")
-    parser.add_argument("--bootstrap-servers", default="localhost:9092")
+    parser.add_argument("--bootstrap-servers", default="127.0.0.1:9092")  # IPv4 literal: see docker-compose.yml
     parser.add_argument("--batch-size", type=int, default=2000)
     parser.add_argument("--batch-delay", type=float, default=0.2)
     parser.add_argument("--max-messages", type=int, default=None)
@@ -190,7 +192,7 @@ def main() -> int:
     finally:
         if args.stop_kafka:
             print("Stopping streaming profile (nothing is removed) ...", flush=True)
-            _run(["docker", "compose", "--profile", "streaming", "stop"])
+            _run(stop_streaming_command())
 
     consumer_summary = parse_summary_line(state["text"], "CONSUMER_SUMMARY")
     if consumer_summary is None:

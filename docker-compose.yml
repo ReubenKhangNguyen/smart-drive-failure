@@ -281,7 +281,9 @@ services:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      # 127.0.0.1, not localhost: on Windows `localhost` resolves to ::1 first, and the port is published on the IPv4
+      # loopback only, so a host client advertised `localhost:9092` was refused (measured: 127.0.0.1 connects, ::1 does not)
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://127.0.0.1:9092
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       # KAFKA_HEAP_OPTS is the variable kafka-server-start reads (image default -Xmx1G -Xms1G)

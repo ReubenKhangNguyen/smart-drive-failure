@@ -17,6 +17,19 @@ COMPOSE_NETWORK = "smart-drive-failure_smart-drive-net"
 KAFKA_INTERNAL = "kafka:29092"
 
 
+STREAMING_SERVICES = ["zookeeper", "kafka"]
+
+
+def stop_streaming_command() -> List[str]:
+    """Stop ONLY zookeeper and kafka. `docker compose --profile streaming stop` WITHOUT service names stops every
+    service of the project (HDFS and Spark too): it did, once, and the cluster had to be restarted."""
+    return ["docker", "compose", "--profile", "streaming", "stop"] + STREAMING_SERVICES
+
+
+def start_streaming_command() -> List[str]:
+    return ["docker", "compose", "--profile", "streaming", "up", "-d"] + STREAMING_SERVICES
+
+
 def create_topic_command(topic: str) -> List[str]:
     return ["docker", "compose", "exec", "-T", "kafka", "kafka-topics", "--bootstrap-server", KAFKA_INTERNAL,
             "--create", "--if-not-exists", "--topic", topic, "--partitions", "1", "--replication-factor", "1"]

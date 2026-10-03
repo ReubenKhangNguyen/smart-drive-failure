@@ -12,6 +12,8 @@ from pipeline.streaming_demo import (
     create_topic_command,
     parse_summary_line,
     producer_container_command,
+    start_streaming_command,
+    stop_streaming_command,
 )
 from pipeline.streaming_report import format_report, memory_summary, parse_docker_stats, total_mib
 
@@ -139,3 +141,20 @@ def test_host_side_files_need_neither_pyspark_nor_yaml_nor_the_config_package():
         source = (ROOT / path).read_text(encoding="utf-8")
         imports = re.findall(r"^\s*(?:import|from)\s+([\w.]+)", source, flags=re.MULTILINE)
         assert not [m for m in imports if m.split(".")[0] in ("pyspark", "yaml", "config", "numpy", "pandas")], (path, imports)
+
+
+def test_stop_command_names_only_zookeeper_and_kafka_so_hdfs_and_spark_keep_running():
+    # regression: `docker compose --profile streaming stop` with no service names stopped the WHOLE project
+    command = stop_streaming_command()
+
+    assert command == ["docker", "compose", "--profile", "streaming", "stop", "zookeeper", "kafka"]
+    assert command[command.index("stop") + 1:] == ["zookeeper", "kafka"]  # a service list must follow `stop`
+    assert start_streaming_command()[-2:] == ["zookeeper", "kafka"]
+
+
+def test_the_demo_script_stops_the_cluster_nowhere_else():
+    source = (ROOT / "scripts" / "run_streaming_demo.py").read_text(encoding="utf-8")
+
+    assert '"stop"]' not in source  # no inline `... stop` list; only stop_streaming_command() may stop anything
+    assert "stop_streaming_command()" in source and "start_streaming_command()" in source
+
