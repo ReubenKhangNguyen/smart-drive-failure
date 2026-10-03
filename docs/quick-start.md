@@ -147,3 +147,23 @@ docker compose restart ui-dashboard
 
 Mở http://localhost:8501. Bảng nào chưa có thì trang tương ứng hiện hướng dẫn tạo bảng đó, không báo lỗi. Test dashboard chạy trong container `tests` (đã có `streamlit==1.38.0`): `docker compose run --rm tests python3 -m pytest -q tests/test_dashboard_data.py tests/test_dashboard_pages.py`.
 
+## 9. Benchmark Big Data (Phase 9)
+
+Benchmark chỉ đo được khi cụm rảnh: **không chạy pytest, K-Means, export hay pipeline song song**, và đóng các ứng dụng nặng trên máy host (RAM trống ít sẽ làm sai số đo). Runner tự dừng (mã thoát 2) nếu master Spark đang chạy ứng dụng khác. Chạy tuần tự; mỗi lệnh dưới đây dùng chung tiền tố:
+
+```bash
+SUBMIT="docker compose exec -e PYTHONPATH=/opt/smart-drive spark-master /opt/spark/bin/spark-submit --master spark://spark-master:7077 --executor-cores 2 --executor-memory 1g"
+python scripts/benchmark_env.py                      # trên máy host, ngay trước khi đo: RAM, CPU, Docker
+$SUBMIT --total-executor-cores 4 /opt/smart-drive/scripts/run_benchmark.py --experiment format --scope 7d
+$SUBMIT --total-executor-cores 4 /opt/smart-drive/scripts/run_benchmark.py --experiment format --scope q1   # CSV toàn Q1 (lâu)
+$SUBMIT --total-executor-cores 4 /opt/smart-drive/scripts/run_benchmark.py --experiment small_files
+for W in csv_7d silver_q1; do
+  $SUBMIT --total-executor-cores 2 /opt/smart-drive/scripts/run_benchmark.py --experiment workers --label cores_2_executors_1 --workload $W
+  $SUBMIT --total-executor-cores 4 /opt/smart-drive/scripts/run_benchmark.py --experiment workers --label cores_4_executors_2 --workload $W
+done
+$SUBMIT --total-executor-cores 2 /opt/smart-drive/scripts/build_benchmark_report.py   # gộp -> benchmark.md + 2 bảng HĐ9
+docker compose restart ui-dashboard
+```
+
+Giới hạn số worker bằng `--total-executor-cores` (2 core = 1 executor trên một worker, 4 core = 2 executor), không dừng hay xóa container nào; runner ghi số executor thật và đánh dấu không hợp lệ nếu không đúng nhãn. Bản sao tạm của benchmark nằm ở `/smart-drive/benchmark_tmp` (dùng lại nếu đã có, không bao giờ tự ghi đè hay xóa; dọn khi nhóm đồng ý). Kết quả: `artifacts/reports/benchmark.md`, `artifacts/dashboard/benchmark.parquet` và `benchmark_environment.parquet`; xem ở trang Hiệu năng cụm.
+
