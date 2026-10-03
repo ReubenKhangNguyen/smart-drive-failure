@@ -24,7 +24,7 @@ Vietnamese version: [README_vi.md](README_vi.md).
 |---|---|---|
 | 1 | **S.M.A.R.T. analysis**: annual failure rate (AFR) by manufacturer and model, healthy vs. failed distributions, signals before failure, K-Means segmentation | `analytics/`, Gold `analytics`, dashboard pages *Phân tích SMART* and *Tình trạng ổ cứng* |
 | 2 | **Health assessment** per drive and day: *Healthy / Watch / Critical*, with the reason (which indicators triggered the rule) | Gold `health_status`, rule set `rules_v1` |
-| 3 | **Failure prediction**: risk score that a drive fails within the next 7 days, plus a daily Top-K alert list (K = 100) | `features/`, `ml/`, Gold `predictions`, dashboard page *Dự đoán hỏng 7 ngày* |
+| 3 | Read with Spark | `processing/spark_jobs/smart_etl.py`: Spark reads the Bronze CSV files from HDFS with `header=true` and no `inferSchema`, so every column arrives as text and is cast explicitly in step 4 |
 
 ## 2. Architecture
 
@@ -52,9 +52,9 @@ Cluster (Docker Compose): 1 NameNode, 3 DataNodes (HDFS replication 2; Bronze 1)
 |---|---|---|
 | 1 | Prepare HDFS | `docker-compose.yml`; Bronze/Silver/Gold layout under `/smart-drive` ([docs/quick-start.md](docs/quick-start.md), section 3) |
 | 2 | Upload data | `scripts/upload_to_hdfs.py`, `ingestion/hdfs_loader.py`, `ingestion/dataset_validator.py`; check with `scripts/verify_bronze.py` |
-| 3 | Read with Spark | `processing/spark_jobs/smart_etl.py`: CSV read from HDFS with an explicit schema (no `inferSchema`) |
-| 4 | Clean data | `processing/spark_jobs/smart_etl.py`, `smart_cleaning.py`: types, de-duplication, null handling, Silver Parquet |
-| 5 | Spark SQL | `analytics/smart_analysis.py`, `failure_analysis.py`, `drive_model_analysis.py`, `health_status.py`, `build_analytics.py`: `spark.sql` on temporary views |
+| 3 | Read with Spark | `processing/spark_jobs/smart_etl.py`: Spark reads the Bronze CSV files from HDFS with `header=true` and no `inferSchema`, so every column arrives as text and is cast explicitly in step 4 |
+| 4 | Clean data | `processing/spark_jobs/smart_etl.py`: explicit casts, null handling, de-duplication on (serial, date), Silver Parquet partitioned by date; `smart_cleaning.py`: data-quality checks (duplicate keys, implausible values, missing days) |
+| 5 | Spark SQL | `spark.sql` on temporary views in exactly five files: `analytics/build_analytics.py` (AFR, SMART distributions, signal before failure), `failure_analysis.py`, `drive_model_analysis.py`, `kmeans_segmentation.py`, `export_dashboard.py`. The `rules_v1` rules in `analytics/health_status.py` and the helpers in `analytics/smart_analysis.py` use the DataFrame API; the three-level distribution is counted with SQL in `export_dashboard.py` |
 | 6 | Advanced analysis / clustering | `analytics/kmeans_segmentation.py` (K-Means on SMART behaviour); `ml/train.py`, `ml/evaluate.py` (Logistic Regression and Random Forest) |
 | 7 | Save results | Gold tables `features`, `analytics`, `health_status`, `predictions` (Parquet on HDFS); dashboard tables exported by `analytics/export_dashboard.py` |
 | 8 | Kafka ingest | `ingestion/kafka_producer.py`, `pipeline/streaming_consumer.py`, `scripts/run_streaming_demo.py` |
@@ -199,7 +199,7 @@ docker compose run --rm tests python3 -m pytest -q
 ```text
 config/                 central settings (project.yaml), HDFS configuration
 ingestion/              download, validation, Bronze loading, Kafka producer
-processing/spark_jobs/  Bronze -> Silver (explicit schema, cleaning), schema profiling
+processing/spark_jobs/  Bronze -> Silver (explicit casts, cleaning), schema profiling
 features/               7-day label and rolling features
 ml/                     train, evaluate, score
 analytics/              SMART analysis, health status, K-Means, dashboard export, benchmark

@@ -24,7 +24,7 @@ Bản tiếng Anh: [README.md](README.md).
 |---|---|---|
 | 1 | **Phân tích chỉ số S.M.A.R.T.**: tỷ lệ hỏng hằng năm (AFR) theo hãng và model, phân phối ổ khỏe so với ổ hỏng, tín hiệu trước khi hỏng, phân cụm K-Means | `analytics/`, Gold `analytics`, trang dashboard *Phân tích SMART* và *Tình trạng ổ cứng* |
 | 2 | **Đánh giá tình trạng** từng ổ theo ngày: *Khỏe / Cần theo dõi / Nguy hiểm*, kèm lý do (chỉ số nào kích hoạt luật) | Gold `health_status`, bộ luật `rules_v1` |
-| 3 | **Dự đoán ổ hỏng trong 7 ngày**: điểm rủi ro cho từng ổ và danh sách cảnh báo Top-K mỗi ngày (K = 100) | `features/`, `ml/`, Gold `predictions`, trang *Dự đoán hỏng 7 ngày* |
+| 3 | Đọc bằng Spark | `processing/spark_jobs/smart_etl.py`: Spark đọc CSV Bronze từ HDFS với `header=true` và không dùng `inferSchema`, nên mọi cột vào dưới dạng chuỗi và được ép kiểu tường minh ở bước 4 |
 
 ## 2. Kiến trúc
 
@@ -52,9 +52,9 @@ Cụm (Docker Compose): 1 NameNode, 3 DataNode (nhân bản HDFS 2; Bronze 1), 1
 |---|---|---|
 | 1 | Chuẩn bị HDFS | `docker-compose.yml`; cấu trúc Bronze/Silver/Gold dưới `/smart-drive` ([docs/quick-start.md](docs/quick-start.md), mục 3) |
 | 2 | Upload dữ liệu | `scripts/upload_to_hdfs.py`, `ingestion/hdfs_loader.py`, `ingestion/dataset_validator.py`; kiểm tra bằng `scripts/verify_bronze.py` |
-| 3 | Đọc bằng Spark | `processing/spark_jobs/smart_etl.py`: đọc CSV từ HDFS với schema khai báo tường minh (không dùng `inferSchema`) |
-| 4 | Làm sạch dữ liệu | `processing/spark_jobs/smart_etl.py`, `smart_cleaning.py`: ép kiểu, khử trùng, xử lý null, ghi Silver Parquet |
-| 5 | Spark SQL | `analytics/smart_analysis.py`, `failure_analysis.py`, `drive_model_analysis.py`, `health_status.py`, `build_analytics.py`: `spark.sql` trên view tạm |
+| 3 | Đọc bằng Spark | `processing/spark_jobs/smart_etl.py`: Spark đọc CSV Bronze từ HDFS với `header=true` và không dùng `inferSchema`, nên mọi cột vào dưới dạng chuỗi và được ép kiểu tường minh ở bước 4 |
+| 4 | Làm sạch dữ liệu | `processing/spark_jobs/smart_etl.py`: ép kiểu tường minh, xử lý null, khử trùng theo (serial, ngày), ghi Silver Parquet phân vùng theo ngày; `smart_cleaning.py`: các phép kiểm tra chất lượng dữ liệu (khóa trùng, giá trị bất hợp lý, ngày thiếu) |
+| 5 | Spark SQL | `spark.sql` trên view tạm ở đúng năm file: `analytics/build_analytics.py` (AFR, phân phối SMART, tín hiệu trước khi hỏng), `failure_analysis.py`, `drive_model_analysis.py`, `kmeans_segmentation.py`, `export_dashboard.py`. Luật `rules_v1` trong `analytics/health_status.py` và các hàm trong `analytics/smart_analysis.py` viết bằng DataFrame API; phân bố ba mức tình trạng được đếm bằng SQL trong `export_dashboard.py` |
 | 6 | Phân tích nâng cao / phân cụm | `analytics/kmeans_segmentation.py` (K-Means theo hành vi SMART); `ml/train.py`, `ml/evaluate.py` (Logistic Regression và Random Forest) |
 | 7 | Lưu kết quả | Bảng Gold `features`, `analytics`, `health_status`, `predictions` (Parquet trên HDFS); bảng cho dashboard xuất bởi `analytics/export_dashboard.py` |
 | 8 | Kafka ingest | `ingestion/kafka_producer.py`, `pipeline/streaming_consumer.py`, `scripts/run_streaming_demo.py` |
@@ -199,7 +199,7 @@ docker compose run --rm tests python3 -m pytest -q
 ```text
 config/                 cấu hình trung tâm (project.yaml), cấu hình HDFS
 ingestion/              tải, kiểm tra, nạp Bronze, Kafka producer
-processing/spark_jobs/  Bronze -> Silver (schema tường minh, làm sạch), profiling schema
+processing/spark_jobs/  Bronze -> Silver (ép kiểu tường minh, làm sạch), profiling schema
 features/               nhãn 7 ngày và đặc trưng theo cửa sổ
 ml/                     huấn luyện, đánh giá, chấm điểm
 analytics/              phân tích SMART, tình trạng ổ, K-Means, xuất dashboard, benchmark
