@@ -274,3 +274,35 @@ def test_cluster_performance_without_benchmark_points_to_the_runner(empty_dirs):
     hints = " ".join(str(i.value) for i in at.info)
     assert not at.exception and "scripts/run_benchmark.py" in hints
 
+
+def _signal_rows(attributes):
+    rows = []
+    for name in attributes:
+        for days, rate in ((7, 0.5), (30, 0.6)):
+            rows.append({"smart_attribute": name, "window_days": days, "failed_serials": 1030,
+                         "signalled_serials": int(1030 * rate), "signal_rate": rate})
+    return pd.DataFrame(rows)
+
+
+def test_smart_analysis_explains_why_smart_9_and_194_are_near_100_percent(empty_dirs):
+    dashboard, reports = empty_dirs
+    _fill(dashboard, reports)
+    _w(dashboard, "pre_failure_signal", _signal_rows(["smart_5_raw", "smart_9_raw", "smart_194_raw", "smart_197_raw"]))
+
+    at = _page("smart_analysis").run()
+    captions = [str(c.value) for c in at.caption]
+
+    assert not at.exception
+    note = [c for c in captions if "gần 100%" in c]
+    assert len(note) == 1 and "smart_9_raw (giờ bật máy)" in note[0] and "smart_194_raw (nhiệt độ)" in note[0]
+    assert "không phải tín hiệu hỏng" in note[0] and "rules_v1" in note[0]
+
+
+def test_smart_analysis_shows_no_such_note_when_those_columns_are_absent(empty_dirs):
+    _fill(*empty_dirs)  # the default fixture only has smart_5_raw in pre_failure_signal
+
+    at = _page("smart_analysis").run()
+
+    assert not at.exception
+    assert not [c for c in at.caption if "gần 100%" in str(c.value)]
+

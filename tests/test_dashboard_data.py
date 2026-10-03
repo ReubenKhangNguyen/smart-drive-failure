@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from ui_dashboard import data
-from ui_dashboard.explain import RISK_SCORE_NOTE, TAIL_NOTE, conflict_note, missing_flag_note, tie_note
+from ui_dashboard.explain import RISK_SCORE_NOTE, TAIL_NOTE, always_positive_note, conflict_note, missing_flag_note, tie_note
 
 
 def _write(base, name, df):
@@ -212,3 +212,16 @@ def test_benchmark_labels_keep_two_workloads_of_one_variant_apart():
     assert labels == ["cores_2_executors_1 @ csv_7d", "cores_2_executors_1 @ silver_q1", "csv_7d"]
     assert len(set(labels)) == 3  # a bar chart keyed on this label cannot stack two measurements into one bar
     assert data.benchmark_label("batch_pipeline/silver_etl", "pipeline step") == "batch_pipeline/silver_etl"
+
+
+def test_always_positive_note_names_only_the_columns_present_and_says_it_is_not_a_failure_signal():
+    both = always_positive_note(["smart_5_raw", "smart_9_raw", "smart_194_raw", "smart_197_raw"])
+    only_hours = always_positive_note(["smart_9_raw", "smart_5_raw"])
+
+    assert "smart_9_raw (giờ bật máy)" in both and "smart_194_raw (nhiệt độ)" in both
+    assert "không phải tín hiệu hỏng" in both and "rules_v1 đã loại" in both and "gần 100%" in both
+    assert "smart_9_raw (giờ bật máy)" in only_hours and "smart_194_raw" not in only_hours
+    assert always_positive_note(["smart_5_raw", "smart_187_raw", "smart_197_raw", "smart_198_raw", "smart_199_raw"]) is None
+    assert always_positive_note([]) is None
+    assert "xác suất" not in both.lower()
+
