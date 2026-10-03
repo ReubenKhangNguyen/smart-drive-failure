@@ -7,6 +7,8 @@ from typing import Dict, List
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 
+from config.settings import hdfs_uri, load_config
+
 
 def list_csv_files(spark: SparkSession, dir_path: str) -> List[str]:
     hadoop_conf = spark._jsc.hadoopConfiguration()
@@ -71,10 +73,18 @@ def null_rate_report(df: DataFrame, columns: List[str]) -> Dict[str, float]:
     return {c: row[c] / total for c in columns}
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Liet ke cot va phat hien schema drift tren thu muc Bronze CSV")
-    parser.add_argument("--dir", required=True, help="Duong dan HDFS hoac local toi thu muc chua CSV, vd hdfs://namenode:9000/smart-drive/bronze/year=2026/quarter=Q1")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--dir",
+        default=hdfs_uri(load_config(), "bronze"),
+        help="Duong dan HDFS hoac local toi thu muc chua CSV (mac dinh: Bronze trong config/project.yaml)",
+    )
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
 
     spark = SparkSession.builder.appName("smart-schema-profile").getOrCreate()
     profile = profile_schema(spark, args.dir)
