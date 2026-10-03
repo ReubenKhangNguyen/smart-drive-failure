@@ -12,6 +12,9 @@ PipelineStep = Tuple[str, Callable[[], Dict[str, Any]]]
 DEFAULT_REPORT_DIR = Path(__file__).resolve().parent.parent / "artifacts" / "reports"
 NOT_APPLICABLE = "không áp dụng"
 
+# Names of the batch steps, in pipeline order (see build_steps); `--steps` selects a subset of them.
+STEP_NAMES = ("silver_etl", "analytics", "health_status", "features")
+
 
 def run_steps(steps: List[PipelineStep]) -> Dict[str, Any]:
     """Run (name, callable) steps in order, stop on the first exception, and log the
@@ -26,6 +29,31 @@ def run_steps(steps: List[PipelineStep]) -> Dict[str, Any]:
             return {"steps": log, "status": "failed", "failed_step": name}
         log.append({"step": name, "elapsed_seconds": round(time.time() - start, 2), "status": "ok", "result": result})
     return {"steps": log, "status": "ok"}
+
+
+def parse_steps(text: Optional[str]) -> Optional[List[str]]:
+    """`--steps a,b` -> ['a', 'b']; None means every step. Unknown or empty names raise ValueError."""
+    if text is None:
+        return None
+    names = [n.strip() for n in text.split(",") if n.strip()]
+    if not names:
+        raise ValueError("--steps is empty; valid steps: {}".format(", ".join(STEP_NAMES)))
+    unknown = [n for n in names if n not in STEP_NAMES]
+    if unknown:
+        raise ValueError("unknown step(s): {}; valid steps: {}".format(", ".join(unknown), ", ".join(STEP_NAMES)))
+    return names
+
+
+def select_steps(steps: List[PipelineStep], names: Optional[List[str]] = None) -> List[PipelineStep]:
+    """Keep only the named steps, always in pipeline order (the order of `names` is ignored)."""
+    if names is None:
+        return list(steps)
+    available = {name for name, _ in steps}
+    missing = sorted(set(names) - available)
+    if missing:
+        raise ValueError("steps not in this pipeline: {}".format(", ".join(missing)))
+    wanted = set(names)
+    return [step for step in steps if step[0] in wanted]
 
 
 def _rows_in_out(result: Optional[Dict[str, Any]]) -> Tuple[Any, Any]:

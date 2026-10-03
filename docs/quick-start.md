@@ -167,3 +167,40 @@ docker compose restart ui-dashboard
 
 Giới hạn số worker bằng `--total-executor-cores` (2 core = 1 executor trên một worker, 4 core = 2 executor), không dừng hay xóa container nào; runner ghi số executor thật và đánh dấu không hợp lệ nếu không đúng nhãn. Bản sao tạm của benchmark nằm ở `/smart-drive/benchmark_tmp` (dùng lại nếu đã có, không bao giờ tự ghi đè hay xóa; dọn khi nhóm đồng ý). Kết quả: `artifacts/reports/benchmark.md`, `artifacts/dashboard/benchmark.parquet` và `benchmark_environment.parquet`; xem ở trang Hiệu năng cụm.
 
+## 10. Airflow DAG (Phase 7.b, bước 9 của giảng viên)
+
+DAG `smart_drive_pipeline` điều phối cả dự án bằng cách gọi lại các script có sẵn (không viết lại logic), chạy thủ công (không có lịch). Tám task tuần tự:
+
+| Task | Gọi | Ghi chú |
+|---|---|---|
+| `verify_bronze` | `scripts/verify_bronze.py` | **Chỉ xác nhận** (chỉ đọc, qua WebHDFS) Bronze đã đủ file cho từng ngày; **không nạp dữ liệu** |
+| `clean_silver` | `scripts/run_batch_pipeline.py --steps silver_etl` | Bronze → Silver |
+| `build_analytics_and_health` | `scripts/run_batch_pipeline.py --steps analytics,health_status` | Gold analytics (HĐ6) và health_status |
+| `segment_drives_kmeans` | `analytics/kmeans_segmentation.py` | K-Means (HĐ7), chỉ có trong DAG, không nằm trong `batch_pipeline` |
+| `build_features` | `scripts/run_batch_pipeline.py --steps features` | Gold features |
+| `train_model` | `scripts/run_training_pipeline.py` | Chỉ train + validation, **không chạy test**, không ghi đè model đã lưu |
+| `score_predictions` | `scripts/run_scoring_pipeline.py` | Gold predictions |
+| `export_dashboard` | `analytics/export_dashboard.py` | Bảng cho dashboard (HĐ8) |
+
+**Nạp Bronze là bước thủ công** `python scripts/upload_to_hdfs.py ...` chạy trên máy host (script cần docker CLI và đường dẫn dữ liệu trên host, mục 2 ở trên); DAG chỉ xác nhận kết quả. Nếu thiếu file, `verify_bronze` dừng DAG và in hướng dẫn.
+
+Cách làm: Airflow 2.10.5 (bản mới nhất còn hỗ trợ Python 3.8) chạy trong image dựng từ image Spark của dự án (cùng Python 3.8, Java 11, Spark 3.5.1 với cụm), trong venv riêng; mỗi task Spark chạy `spark-submit` ở client mode từ container Airflow tới `spark://spark-master:7077` với executor mặc định (như các lệnh chạy tay). SQLite + SequentialExecutor, chỉ dành cho demo. Không mount docker socket.
+
+Trước khi chạy (RAM Docker 7.36 GiB là giới hạn): đóng ứng dụng nặng trên máy host, cắm sạc, tắt chế độ ngủ, dừng dashboard (`docker compose stop ui-dashboard`, không xóa gì) và không chạy job Spark khác. Mỗi task Spark tự kiểm tra master không có ứng dụng nào khác (`scripts/check_spark_idle.py`) và dùng pool `spark_cluster` 1 slot.
+
+```bash
+# 1. Đặt mật khẩu admin demo trong .env (không commit .env): AIRFLOW_ADMIN_PASSWORD=<mật khẩu của bạn>
+docker compose build spark-master                     # image Spark gốc (nếu chưa có)
+docker compose --profile orchestration build          # image Airflow (lần đầu vài phút)
+docker compose stop ui-dashboard
+docker compose --profile orchestration up -d          # airflow-init chạy một lần rồi thoát; giao diện: http://127.0.0.1:8081
+# 2. Trigger DAG (hoặc bấm Trigger DAG trên giao diện), rồi xem trạng thái
+docker compose exec airflow-scheduler airflow dags trigger smart_drive_pipeline
+docker compose exec airflow-scheduler airflow dags list-runs -d smart_drive_pipeline
+# 3. Dọn: tắt Airflow và bật lại dashboard (không xóa volume)
+docker compose --profile orchestration stop airflow-webserver airflow-scheduler
+docker compose start ui-dashboard
+```
+
+Kiểm tra DAG import không lỗi và đúng thứ tự phụ thuộc (chạy trong container Airflow, vì Airflow không có trong image `tests`): `docker compose --profile orchestration run --rm --no-deps airflow-scheduler /opt/airflow-venv/bin/python -m pytest -q tests/test_dag.py`. Phần còn lại của test DAG (thứ tự task, script tồn tại, không đổi cỡ executor, train không đụng test) nằm trong `tests/test_dag_spec.py` và chạy trong container `tests`.
+

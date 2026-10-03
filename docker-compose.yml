@@ -23,6 +23,36 @@ x-spark-common: &spark-common
   networks:
     - smart-drive-net
 
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: Dockerfile.airflow
+  image: smart-drive-failure-airflow:2.10.5
+  profiles:
+    - orchestration
+  environment: &airflow-env
+    # SQLite + SequentialExecutor: enough for one sequential demo DAG (Airflow docs: SQLite only works with the
+    # SequentialExecutor and is never for production). One webserver worker keeps RAM low.
+    AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__PARALLELISM: "1"
+    AIRFLOW__WEBSERVER__WORKERS: "1"
+    AIRFLOW__SCHEDULER__PARSING_PROCESSES: "1"
+    HADOOP_CONF_DIR: /opt/spark/conf/hadoop
+    # the Spark driver runs inside the scheduler container (standalone has no cluster mode for Python apps);
+    # executors connect back to it by this name on smart-drive-net
+    SPARK_DRIVER_HOST: airflow-scheduler
+  volumes:
+    - airflow_home:/opt/airflow
+    - ./dags:/opt/airflow/dags:ro
+    - ./config/hadoop:/opt/spark/conf/hadoop:ro
+    - .:/opt/smart-drive:ro
+    - ./artifacts:/opt/smart-drive/artifacts
+  working_dir: /opt/smart-drive
+  networks:
+    - smart-drive-net
+
 services:
   namenode:
     image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
@@ -180,11 +210,56 @@ services:
       - smart-drive-net
     command: ["python3", "-m", "pytest", "-q"]
 
+  airflow-init:
+    <<: *airflow-common
+    container_name: smart-drive-airflow-init
+    restart: "no"
+    environment:
+      <<: *airflow-env
+      # read from the environment (.env); never written in this file. Empty makes the init step fail with a message.
+      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:-}
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        test -n "$${AIRFLOW_ADMIN_PASSWORD:-}" || { echo "AIRFLOW_ADMIN_PASSWORD is not set: put it in .env (see .env.example)" >&2; exit 1; }
+        airflow db migrate
+        airflow pools set spark_cluster 1 "One Spark job at a time"
+        airflow users list 2>/dev/null | grep -qw admin || airflow users create --username admin --password "$$AIRFLOW_ADMIN_PASSWORD" --firstname Admin --lastname Demo --role Admin --email admin@example.com
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: smart-drive-airflow-webserver
+    command: ["airflow", "webserver", "--port", "8080"]
+    ports:
+      - "127.0.0.1:${AIRFLOW_WEB_PORT:-8081}:8080"
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: "no"
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: smart-drive-airflow-scheduler
+    hostname: airflow-scheduler
+    command: ["airflow", "scheduler"]
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    restart: "no"
+
 volumes:
   namenode_data:
   datanode1_data:
   datanode2_data:
   datanode3_data:
+  airflow_home:
 
 networks:
   smart-drive-net:
