@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from pipeline.batch_pipeline import run_steps, write_run_report
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+from pipeline.batch_pipeline import STEP_NAMES, parse_steps, run_steps, select_steps, write_run_report
 
 
 def test_run_steps_runs_all_in_order_on_success():
@@ -82,3 +88,72 @@ def test_write_run_report_marks_failed_run(tmp_path):
 
     assert "THẤT BẠI tại bước a" in text
     assert "hdfs down" in text
+
+
+def _fake_steps():
+    return [(name, (lambda n=name: {"step": n})) for name in STEP_NAMES]
+
+
+def test_step_names_match_the_real_pipeline_order():
+    assert STEP_NAMES == ("silver_etl", "analytics", "health_status", "features")
+
+
+def test_parse_steps_defaults_to_all_and_splits_commas():
+    assert parse_steps(None) is None
+    assert parse_steps("silver_etl") == ["silver_etl"]
+    assert parse_steps(" analytics , health_status ") == ["analytics", "health_status"]
+
+
+def test_parse_steps_rejects_unknown_and_empty_names():
+    with pytest.raises(ValueError) as unknown:
+        parse_steps("silver_etl,nope")
+    assert "nope" in str(unknown.value) and "valid steps" in str(unknown.value)
+    for empty in ("", " , "):
+        with pytest.raises(ValueError):
+            parse_steps(empty)
+
+
+def test_select_steps_defaults_to_all_four_in_pipeline_order():
+    selected = select_steps(_fake_steps())
+
+    assert [name for name, _ in selected] == list(STEP_NAMES)
+
+
+def test_select_steps_keeps_pipeline_order_whatever_the_request_order():
+    selected = select_steps(_fake_steps(), ["features", "analytics"])
+
+    assert [name for name, _ in selected] == ["analytics", "features"]
+    assert [name for name, _ in select_steps(_fake_steps(), ["health_status"])] == ["health_status"]
+
+
+def test_select_steps_rejects_a_name_the_pipeline_does_not_have():
+    with pytest.raises(ValueError):
+        select_steps([("only", lambda: {})], ["silver_etl"])
+
+
+def test_selected_steps_run_only_those_and_still_stop_on_failure():
+    calls = []
+
+    def ok(name):
+        return lambda: calls.append(name) or {"ok": True}
+
+    def boom():
+        calls.append("analytics")
+        raise RuntimeError("boom")
+
+    steps = [("silver_etl", ok("silver_etl")), ("analytics", boom), ("health_status", ok("health_status")), ("features", ok("features"))]
+
+    result = run_steps(select_steps(steps, ["analytics", "health_status"]))
+
+    assert calls == ["analytics"] and result["status"] == "failed" and result["failed_step"] == "analytics"
+
+
+def test_run_batch_pipeline_cli_rejects_an_unknown_step_before_starting_spark():
+    script = Path(__file__).resolve().parent.parent / "scripts" / "run_batch_pipeline.py"
+
+    done = subprocess.run([sys.executable, str(script), "--steps", "silver_etl,bogus"], stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, universal_newlines=True, cwd=str(script.parent.parent))
+
+    assert done.returncode == 2  # argparse error, no SparkSession was created
+    assert "bogus" in done.stderr and "valid steps" in done.stderr
+
