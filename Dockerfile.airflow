@@ -1,0 +1,31 @@
+# Airflow 2.10.5 inside the project's own Spark image, so the Spark driver started by a DAG task has exactly the
+# cluster's Python (3.8), Java (11) and Spark (3.5.1). Airflow lives in its own venv: the system python3 keeps the
+# numpy/pandas/pyyaml pins of Dockerfile.spark that the PySpark driver needs. Build the base first:
+#   docker compose build spark-master
+# 2.10.5 is the last Airflow line that supports Python 3.8 (2.11 and 3.x need >= 3.9). pytest is in the venv only
+# to run tests/test_dag.py (DAG import + dependencies) inside this image.
+ARG BASE_IMAGE=smart-drive-failure-spark:3.5.1-numpy
+FROM ${BASE_IMAGE}
+
+USER root
+
+ARG AIRFLOW_VERSION=2.10.5
+
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y python3-venv curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m venv /opt/airflow-venv \
+    && /opt/airflow-venv/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/airflow-venv/bin/pip install --no-cache-dir "apache-airflow==${AIRFLOW_VERSION}" "pytest==8.3.3" \
+        --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-3.8.txt"
+
+RUN mkdir -p /opt/airflow/dags /opt/airflow/logs \
+    && chown -R spark:spark /opt/airflow /opt/airflow-venv
+
+ENV AIRFLOW_HOME=/opt/airflow
+# appended LAST so `python3` stays /usr/bin/python3 (system python with numpy/pandas/pyyaml); only `airflow` comes from the venv
+ENV PATH="${PATH}:/opt/airflow-venv/bin"
+
+USER spark
+WORKDIR /opt/smart-drive
