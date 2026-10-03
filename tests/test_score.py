@@ -85,3 +85,45 @@ def test_run_keeps_previous_day_predictions_when_scoring_another_day(spark, tmp_
         spark.conf.unset("spark.sql.sources.partitionOverwriteMode")
 
     assert dates == ["2026-02-01", "2026-02-02"]
+
+
+def test_score_day_breaks_saturated_ties_by_margin_before_serial(spark):
+    # separable training data so that large feature values saturate the sigmoid at exactly 1.0
+    train_rows = [_row("2026-01-01", "T%d" % i, 10.0 + i, 0.0, 1) for i in range(5)] + [
+        _row("2026-01-01", "N%d" % i, float(i) / 10.0, 0.0, 0) for i in range(5)
+    ]
+    train_df = spark.createDataFrame(train_rows, COLUMNS)
+    assembler = VectorAssembler(inputCols=["f1", "f2"], outputCol="features")
+    classifier = LogisticRegression(featuresCol="features", labelCol="fail_within_7_days", maxIter=50)
+    model = Pipeline(stages=[assembler, classifier]).fit(train_df)
+
+    # SN_A sorts first alphabetically but has the LOWER margin; both saturate at risk_score == 1.0
+    score_rows = [
+        _row("2026-02-01", "SN_A", 1000.0, 0.0),
+        _row("2026-02-01", "SN_Z", 2000.0, 0.0),
+        _row("2026-02-01", "SN_LOW", 0.0, 0.0),
+    ]
+    features_df = spark.createDataFrame(score_rows, COLUMNS)
+
+    result = score_day(model, features_df, score_date="2026-02-01", k=1)
+    by_serial = {r["serial_number"]: r for r in result.collect()}
+
+    assert by_serial["SN_A"]["risk_score"] == 1.0 and by_serial["SN_Z"]["risk_score"] == 1.0  # the tie precondition
+    assert by_serial["SN_Z"]["risk_rank"] == 1 and by_serial["SN_A"]["risk_rank"] == 2 and by_serial["SN_LOW"]["risk_rank"] == 3
+    assert by_serial["SN_Z"]["alert"] is True and by_serial["SN_A"]["alert"] is False
+
+
+def test_score_day_keeps_hd4_columns_only_and_serial_order_when_margins_tie(spark):
+    train_df = spark.createDataFrame(
+        [_row("2026-01-01", "T1", 10.0, 0.0, 1), _row("2026-01-01", "T2", 9.0, 0.0, 1),
+         _row("2026-01-01", "N1", 0.0, 0.0, 0), _row("2026-01-01", "N2", 0.1, 0.0, 0)], COLUMNS)
+    model = Pipeline(stages=[VectorAssembler(inputCols=["f1", "f2"], outputCol="features"),
+                             LogisticRegression(featuresCol="features", labelCol="fail_within_7_days", maxIter=30)]).fit(train_df)
+    features_df = spark.createDataFrame(
+        [_row("2026-02-01", "SN_B", 5.0, 0.0), _row("2026-02-01", "SN_A", 5.0, 0.0)], COLUMNS)
+
+    result = score_day(model, features_df, score_date="2026-02-01", k=1)
+    ranks = {r["serial_number"]: r["risk_rank"] for r in result.collect()}
+
+    assert result.columns == ["date", "serial_number", "model", "risk_score", "risk_rank", "alert"]  # no margin column
+    assert ranks == {"SN_A": 1, "SN_B": 2}  # identical score and margin -> serial_number decides
