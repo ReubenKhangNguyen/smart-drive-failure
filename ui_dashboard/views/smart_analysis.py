@@ -2,6 +2,7 @@ import altair as alt
 import streamlit as st
 
 from ui_dashboard import common
+from ui_dashboard.explain import always_positive_note
 
 COHORT_LABELS = {"healthy": "Ổ khỏe (ngày quan sát cuối)", "pre_failure": "Ổ hỏng (ngày trước khi hỏng)"}
 
@@ -67,3 +68,6 @@ if signal is not None and len(signal):
     st.caption(
         "Tín hiệu = giá trị > 0 ít nhất một lần trong cửa sổ trước ngày hỏng, trên {:,} ổ hỏng. Ổ hỏng ở đầu quý có cửa sổ "
         "30 ngày bị cắt do thiếu lịch sử.".format(int(view["failed_serials"].iloc[0])))
+    always_positive = always_positive_note(view["smart_attribute"].unique())
+    if always_positive:
+        st.caption(always_positive)

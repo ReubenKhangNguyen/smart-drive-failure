@@ -74,3 +74,17 @@ def missing_flag_note(features) -> Optional[str]:
             "không báo thuộc tính đó, thường gắn với loại hoặc dòng ổ hơn là tình trạng sức khỏe, nên đây có thể phản ánh loại ổ "
             "chứ không phải dấu hiệu sắp hỏng. Ghi nhận để diễn giải; chưa được đánh giá và mô hình không bị sửa.".format(", ".join(flags)))
 
+
+# Attributes that are almost always > 0 on any working drive: they say nothing about failure (rules_v1 excludes them).
+ALWAYS_POSITIVE = {"smart_9_raw": "giờ bật máy", "smart_194_raw": "nhiệt độ"}
+
+
+def always_positive_note(attributes) -> Optional[str]:
+    """Caption for the pre-failure signal chart when smart_9_raw / smart_194_raw are among its bars."""
+    present = [name for name in ALWAYS_POSITIVE if name in set(attributes)]
+    if not present:
+        return None
+    names = " và ".join("{} ({})".format(name, ALWAYS_POSITIVE[name]) for name in present)
+    return ("{} gần 100% vì ổ nào còn hoạt động cũng luôn có giá trị > 0 ở các chỉ số này; đó không phải tín hiệu hỏng, "
+            "và luật rules_v1 đã loại các cột này.".format(names))
+
