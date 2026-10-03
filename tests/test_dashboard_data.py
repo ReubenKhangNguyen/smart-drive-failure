@@ -171,3 +171,23 @@ def test_missing_flag_note_lists_the_flags_found_and_stays_cautious():
     assert "smart_187_raw_is_missing" in note and "smart_188_raw_is_missing" in note
     assert "loại hoặc dòng ổ" in note and "không bị sửa" in note
     assert missing_flag_note(["smart_197_raw", "smart_5_raw_max_7d"]) is None
+
+
+def test_benchmark_views_format_numbers_and_use_a_dash_for_missing_values():
+    df = pd.DataFrame({
+        "experiment": ["pipeline_steps", "format"], "variant": ["batch/silver_etl", "csv_7d"], "query": ["pipeline step", "q"],
+        "runs": [1, 3], "median_seconds": [269.35, 40.0], "min_seconds": [269.35, 39.0], "max_seconds": [269.35, 41.0],
+        "size_bytes": [None, 2 * 1048576.0], "file_count": [None, 1234.0], "input_partitions": [None, 14.0],
+        "executors": [None, 2.0], "rows": [None, 3000000.0], "note": ["1 lần, không phải trung vị", ""]})
+
+    views = data.benchmark_views(df)
+
+    assert list(views) == ["format", "pipeline_steps"]  # contract order, not row order
+    fmt = views["format"].iloc[0]
+    assert (fmt["Lần"], fmt["Trung vị (s)"], fmt["Dung lượng (MB)"], fmt["Số file"], fmt["Số dòng"], fmt["Ghi chú"]) == (
+        "3", "40.00", "2.0", "1,234", "3,000,000", "—")
+    step = views["pipeline_steps"].iloc[0]
+    assert (step["Dung lượng (MB)"], step["Executor"], step["Số dòng"]) == ("—", "—", "—")
+    assert step["Ghi chú"] == "1 lần, không phải trung vị"
+    assert "benchmark_environment" in data.TABLES and data.TABLES["benchmark"][1] == "HĐ9"
+

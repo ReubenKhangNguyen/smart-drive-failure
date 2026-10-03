@@ -27,7 +27,8 @@ TABLES: Dict[str, Tuple[str, str]] = {
     "smart_history_topk": (EXPORT_JOB, "HĐ8"),
     "model_metrics": (EXPORT_JOB, "HĐ8"),
     "model_feature_importance": (EXPORT_JOB, "HĐ8"),
-    "benchmark": ("analytics/benchmark.py (Phase 9, chưa làm)", "Phase 9"),
+    "benchmark": ("scripts/run_benchmark.py (rồi scripts/build_benchmark_report.py)", "HĐ9"),
+    "benchmark_environment": ("scripts/run_benchmark.py (rồi scripts/build_benchmark_report.py)", "HĐ9"),
 }
 
 MODEL_LABELS = {
@@ -181,3 +182,40 @@ def style_metrics(df: pd.DataFrame) -> pd.DataFrame:
         decimals = 4 if "AUC" in column else 2
         out[column] = out[column].map(lambda v, d=decimals: "—" if pd.isna(v) else "{:.{d}f}".format(float(v), d=d))
     return out
+
+
+BENCHMARK_TITLES = {
+    "format": "Định dạng: CSV so với Parquet",
+    "workers": "Số worker: 1 so với 2",
+    "small_files": "File nhỏ: Gold features gốc so với bản gộp",
+    "pipeline_steps": "Thời gian từng bước pipeline (từ nhật ký đã có)",
+}
+
+
+def _fmt(value: Any, spec: str) -> str:
+    return "—" if value is None or pd.isna(value) else spec.format(value)
+
+
+def benchmark_views(benchmark: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+    """experiment -> display table (strings, an em dash for missing values), in the order of BENCHMARK_TITLES."""
+    views = {}  # type: Dict[str, pd.DataFrame]
+    for experiment in BENCHMARK_TITLES:
+        part = benchmark[benchmark["experiment"] == experiment]
+        if part.empty:
+            continue
+        views[experiment] = pd.DataFrame({
+            "Biến thể": part["variant"].values,
+            "Truy vấn": part["query"].values,
+            "Lần": [_fmt(v, "{:.0f}") for v in part["runs"]],
+            "Trung vị (s)": [_fmt(v, "{:.2f}") for v in part["median_seconds"]],
+            "Min (s)": [_fmt(v, "{:.2f}") for v in part["min_seconds"]],
+            "Max (s)": [_fmt(v, "{:.2f}") for v in part["max_seconds"]],
+            "Dung lượng (MB)": [_fmt(None if pd.isna(v) else v / 1048576.0, "{:.1f}") for v in part["size_bytes"]],
+            "Số file": [_fmt(v, "{:,.0f}") for v in part["file_count"]],
+            "Partition": [_fmt(v, "{:.0f}") for v in part["input_partitions"]],
+            "Executor": [_fmt(v, "{:.0f}") for v in part["executors"]],
+            "Số dòng": [_fmt(v, "{:,.0f}") for v in part["rows"]],
+            "Ghi chú": [v if isinstance(v, str) and v else "—" for v in part["note"]],
+        })
+    return views
+
