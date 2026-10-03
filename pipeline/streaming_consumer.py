@@ -61,21 +61,41 @@ def start_stream(
     )
 
 
+class ProgressTracker:
+    """Cumulative view of StreamingQuery.recentProgress. recentProgress keeps only the LAST 100 events, so summing it
+    plateaus and then shrinks on a long run: the first demo run mistook that plateau for "idle" and stopped the consumer
+    while the producer was still sending. Merging by batchId keeps a monotonic total as long as it is polled often
+    enough (a few seconds; far fewer than 100 batches arrive in between)."""
+
+    def __init__(self) -> None:
+        self._batches = {}  # type: Dict[Any, Dict[str, Any]]
+
+    def update(self, events: List[Dict[str, Any]]) -> None:
+        for event in events:
+            rows = int(event.get("numInputRows") or 0)
+            batch_id = event.get("batchId")
+            if rows > 0 and batch_id is not None:
+                self._batches[batch_id] = {
+                    "batchId": batch_id,
+                    "numInputRows": rows,
+                    "triggerExecutionMs": (event.get("durationMs") or {}).get("triggerExecution"),
+                    "processedRowsPerSecond": event.get("processedRowsPerSecond"),
+                }
+
+    @property
+    def batches(self) -> List[Dict[str, Any]]:
+        return [self._batches[k] for k in sorted(self._batches)]
+
+    @property
+    def total_input_rows(self) -> int:
+        return sum(b["numInputRows"] for b in self._batches.values())
+
+
 def summarize_progress(events: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Micro-batches that read data, from StreamingQuery.recentProgress."""
-    by_batch = {}  # type: Dict[Any, Dict[str, Any]]
-    for event in events:
-        rows = int(event.get("numInputRows") or 0)
-        batch_id = event.get("batchId")
-        if rows > 0 and batch_id is not None:
-            by_batch[batch_id] = {
-                "batchId": batch_id,
-                "numInputRows": rows,
-                "triggerExecutionMs": (event.get("durationMs") or {}).get("triggerExecution"),
-                "processedRowsPerSecond": event.get("processedRowsPerSecond"),
-            }
-    batches = [by_batch[k] for k in sorted(by_batch)]
-    return {"batches": batches, "total_input_rows": sum(b["numInputRows"] for b in batches)}
+    """Micro-batches that read data in one `recentProgress` snapshot (use ProgressTracker across polls)."""
+    tracker = ProgressTracker()
+    tracker.update(events)
+    return {"batches": tracker.batches, "total_input_rows": tracker.total_input_rows}
 
 
 def wait_until_idle(
@@ -86,14 +106,17 @@ def wait_until_idle(
     is_active: Callable[[], bool] = lambda: True,
     clock: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
+    tracker: Optional[ProgressTracker] = None,
 ) -> str:
     """Block until data was read and then none arrived for `idle_seconds` ("idle"), the overall `timeout_seconds`
-    passes ("timeout"), or the query stopped by itself ("stopped")."""
+    passes ("timeout"), or the query stopped by itself ("stopped"). Pass a `tracker` to keep the batches afterwards."""
+    tracker = tracker if tracker is not None else ProgressTracker()
     start = clock()
     seen = 0
     last_growth = None  # type: Optional[float]
     while True:
-        total = summarize_progress(get_progress())["total_input_rows"]
+        tracker.update(get_progress())
+        total = tracker.total_input_rows
         now = clock()
         if total > seen:
             seen, last_growth = total, now
@@ -147,15 +170,16 @@ def main() -> int:
     query = start_stream(spark, args.kafka_bootstrap, args.topic, output_path, checkpoint_path, args.max_offsets_per_trigger)
     print("STREAM_STARTED run_id={} topic={}".format(args.run_id, args.topic), flush=True)
 
+    tracker = ProgressTracker()
     reason = wait_until_idle(lambda: list(query.recentProgress), args.idle_seconds, args.timeout_seconds,
-                             is_active=lambda: query.isActive)
-    progress = summarize_progress(list(query.recentProgress))
+                             is_active=lambda: query.isActive, tracker=tracker)
+    tracker.update(list(query.recentProgress))
     query.stop()
 
     summary = {
         "run_id": args.run_id, "topic": args.topic, "stopped_because": reason, "output_path": output_path,
         "checkpoint_path": checkpoint_path, "max_offsets_per_trigger": args.max_offsets_per_trigger,
-        "micro_batches": progress["batches"], "streamed_input_rows": progress["total_input_rows"],
+        "micro_batches": tracker.batches, "streamed_input_rows": tracker.total_input_rows,
         "output_rows": spark.read.parquet(output_path).count(), "seconds": round(time.time() - started, 1),
     }
     if args.compare_date:

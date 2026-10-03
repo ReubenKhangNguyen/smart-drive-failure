@@ -73,12 +73,22 @@ def format_report(run: Dict[str, Any]) -> str:
             s["failures"], b["failures"], _check(s["failures"] == b["failures"])))
     lines.append("")
 
-    lines += ["## Micro-batch của Spark Structured Streaming\n", "| Batch | Số dòng | Thời gian xử lý (ms) | Dòng/giây |", "|---|---|---|---|"]
-    for batch in consumer["micro_batches"]:
-        rate = batch.get("processedRowsPerSecond")
-        lines.append("| {} | {:,} | {} | {} |".format(
-            batch["batchId"], batch["numInputRows"], batch.get("triggerExecutionMs", "—"),
-            "{:,.0f}".format(rate) if rate else "—"))
+    batches = consumer["micro_batches"]
+    lines += ["## Micro-batch của Spark Structured Streaming\n"]
+    if batches:
+        rows = [b["numInputRows"] for b in batches]
+        lines.append("{:,} micro-batch có dữ liệu, tổng {:,} dòng; mỗi batch trung bình {:,.0f} dòng (nhỏ nhất {:,}, lớn nhất {:,}), "
+                     "consumer bắt kịp tốc độ producer thay vì đợi cả file.\n".format(len(rows), sum(rows), sum(rows) / len(rows), min(rows), max(rows)))
+        lines += ["| Batch | Số dòng | Thời gian xử lý (ms) | Dòng/giây |", "|---|---|---|---|"]
+        shown = batches if len(batches) <= 12 else batches[:5] + [None] + batches[-5:]
+        for batch in shown:
+            if batch is None:
+                lines.append("| … | … ({:,} batch ở giữa) | … | … |".format(len(batches) - 10))
+                continue
+            rate = batch.get("processedRowsPerSecond")
+            lines.append("| {} | {:,} | {} | {} |".format(
+                batch["batchId"], batch["numInputRows"], batch.get("triggerExecutionMs", "—"),
+                "{:,.0f}".format(rate) if rate else "—"))
     lines.append("\nConsumer dừng vì: `{}` (không có dữ liệu mới trong khoảng chờ, hoặc hết thời gian tối đa).\n".format(
         consumer["stopped_because"]))
 

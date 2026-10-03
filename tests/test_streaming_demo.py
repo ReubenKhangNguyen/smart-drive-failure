@@ -158,3 +158,15 @@ def test_the_demo_script_stops_the_cluster_nowhere_else():
     assert '"stop"]' not in source  # no inline `... stop` list; only stop_streaming_command() may stop anything
     assert "stop_streaming_command()" in source and "start_streaming_command()" in source
 
+
+def test_report_condenses_a_long_micro_batch_list_but_keeps_the_totals():
+    run = _run()
+    run["consumer"]["micro_batches"] = [
+        {"batchId": i, "numInputRows": 1000, "triggerExecutionMs": 200, "processedRowsPerSecond": 5000.0} for i in range(200)]
+
+    report = format_report(run)
+
+    assert "200 micro-batch có dữ liệu, tổng 200,000 dòng" in report and "trung bình 1,000 dòng" in report
+    assert "| 0 | 1,000 |" in report and "| 199 | 1,000 |" in report and "(190 batch ở giữa)" in report
+    assert "| 100 | 1,000 |" not in report  # the middle of the list is summarized, not printed
+

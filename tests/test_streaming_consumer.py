@@ -4,7 +4,7 @@ import datetime as dt
 import json
 from typing import Any, Dict, List
 
-from pipeline.streaming_consumer import compare_with_silver, parse_kafka_messages, summarize_progress, wait_until_idle
+from pipeline.streaming_consumer import ProgressTracker, compare_with_silver, parse_kafka_messages, summarize_progress, wait_until_idle
 
 
 def test_parse_kafka_messages_reuses_phase3_cleaning(spark):
@@ -120,3 +120,31 @@ def test_compare_with_silver_reports_a_difference(spark, tmp_path):
     result = compare_with_silver(spark, (tmp_path / "streamed").as_uri(), (tmp_path / "silver").as_uri(), "2026-01-01")
 
     assert result["match"] is False and result["streamed"]["rows"] == 1 and result["silver"]["rows"] == 2
+
+
+def test_progress_tracker_total_never_shrinks_when_recent_progress_rolls_over():
+    tracker = ProgressTracker()
+    tracker.update([_event(i, 100) for i in range(0, 100)])  # snapshot 1: batches 0..99
+    first_total = tracker.total_input_rows
+    tracker.update([_event(i, 100) for i in range(50, 150)])  # snapshot 2: the window moved, batches 0..49 are gone
+
+    assert first_total == 10000 and tracker.total_input_rows == 15000  # 150 batches counted once each
+    assert [b["batchId"] for b in tracker.batches][:2] == [0, 1] and len(tracker.batches) == 150
+
+
+def test_wait_until_idle_does_not_stop_a_long_run_whose_recent_progress_window_is_full():
+    # regression: with only 100 events kept, the old summed total plateaued after batch 100 and the consumer was
+    # declared idle at t=130 while the producer still sent until t=300
+    clock = _Clock()
+
+    def progress() -> List[Dict[str, Any]]:
+        newest = int(min(clock.now, 300))  # one 100-row batch per second until the feed ends at t=300
+        return [_event(i, 100) for i in range(max(0, newest - 99), newest + 1)]
+
+    tracker = ProgressTracker()
+    reason = wait_until_idle(progress, idle_seconds=30, timeout_seconds=1000, poll_seconds=2, clock=clock.clock,
+                             sleep=clock.sleep, tracker=tracker)
+
+    assert reason == "idle" and clock.now >= 330  # only after the feed stopped (t=300) plus 30 quiet seconds
+    assert tracker.total_input_rows == 301 * 100  # every row of the run counted, not just the last 100 batches
+
