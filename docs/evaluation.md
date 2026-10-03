@@ -73,6 +73,24 @@ Không có đặc trưng đơn lẻ nào áp đảo (cao nhất 0.112, xa dướ
 - Baseline luật (chỉ dùng 4 cột, không cửa sổ) vẫn khá cạnh tranh ở đoạn normal (3.47% so với LR 5.55%) — cho thấy phần lớn tín hiệu nằm ở chính 4 cột SMART đã chọn trong Phase 4, phần cửa sổ hóa (Phase 5) và mô hình hóa (Phase 6) cải thiện thêm nhưng không đột phá.
 - Chưa phân tích chi tiết các ca bỏ sót cụ thể (which drives) do giới hạn thời gian — để trong hướng phát triển.
 
+### 5.1. Ổ hỏng không có tín hiệu ở bốn chỉ số SMART
+
+Trong 1,030 ổ hỏng của 2026-Q1, một phần đáng kể không phát ra tín hiệu nào ở bốn chỉ số mà luật `rules_v1` và phân cụm K-Means dựa vào (`smart_5`, `smart_187`, `smart_197`, `smart_198`). Một ổ hỏng được coi là "có tín hiệu" nếu ít nhất một trong bốn chỉ số lớn hơn 0 ít nhất một lần trong cửa sổ `[ngày hỏng − d, ngày hỏng − 1]`; giá trị null được coi là không có tín hiệu.
+
+| Cửa sổ trước ngày hỏng | Ổ hỏng có dòng dữ liệu trong cửa sổ (mẫu số) | Có tín hiệu | Không tín hiệu | Tỷ lệ không tín hiệu |
+|---|---|---|---|---|
+| 1 ngày (ngày liền trước) | 870 | 631 | 239 | 27.5% |
+| 7 ngày | 923 | 679 | 244 | 26.4% |
+| 30 ngày | 1,003 | 762 | 241 | 24.0% |
+
+**Mẫu số thay đổi theo cửa sổ** (870 / 923 / 1,003): cửa sổ càng dài thì càng có thêm ổ hỏng có ít nhất một dòng dữ liệu trong đó (160, 107 và 27 ổ hỏng lần lượt không có dòng nào trong cửa sổ 1, 7 và 30 ngày, nên bị loại khỏi mẫu số). Vì vậy ba tỷ lệ trên không so sánh trực tiếp từng ổ giữa các hàng. Dù vậy kết luận không đổi: nhìn lùi xa hơn chỉ lấy lại thêm vài điểm phần trăm, và khoảng một phần tư số ổ hỏng không có giá trị dương nào ở bốn chỉ số này trong cả tháng trước đó, nên luật `rules_v1` và phân cụm dựa trên bốn chỉ số này không thể phát hiện chúng.
+
+Mô hình Logistic Regression dùng thêm các thuộc tính khác (`smart_9`, `smart_188`, `smart_194`, `smart_199`) và đặc trưng xu hướng 7/14/30 ngày, nhưng mức độ nó bắt được nhóm ổ này chưa được kiểm tra. Các con số mang tính mô tả hồi cứu trên một quý dữ liệu; ổ hỏng ở đầu quý có cửa sổ 30 ngày bị cắt do thiếu lịch sử.
+
+Đối chiếu và nguồn: 239/870 khớp với nhóm `zero_signal` của `kmeans_clusters` (239 ổ hỏng) và với 870 ổ hỏng trong mẫu K-Means. Bảng `pre_failure_signal` chỉ cho tỷ lệ từng chỉ số riêng lẻ, không cho phép hợp theo từng ổ, nên phần hợp được tính trực tiếp từ Silver bằng `spark.sql` theo cùng định nghĩa cửa sổ (job Spark chỉ đọc, ngày 2026-10-02, không ghi vào repo).
+
+Một giới hạn liên quan của recall@100: điểm rủi ro của LR bão hòa (109 ổ có điểm đúng 1.0 trong ngày chấm điểm 2026-03-24), nên recall@100 phụ thuộc cách chia hòa tại ranh giới Top-100. Trên tập validation, chia hòa bằng serial (cách công bố ở trên) cho 9.2072% và chia hòa bằng margin của mô hình cho 9.0579% (precision@100: 10.2727% so với 10.0909%). Chênh lệch này là độ nhạy, không đổi kết luận chọn model.
+
 ## 6. Giới hạn
 
 - Chỉ 1 quý dữ liệu (2026-Q1, 90 ngày); ngưỡng `health_rules.md` và mô hình đều học/tính từ chính quý này — có thể không tổng quát cho quý khác.
