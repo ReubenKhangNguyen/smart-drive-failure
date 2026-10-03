@@ -76,7 +76,8 @@ def test_airflow_is_installed_in_its_own_venv_and_the_venv_python_is_not_first_o
     dockerfile = (ROOT / "Dockerfile.airflow").read_text(encoding="utf-8")
 
     assert "python3 -m venv /opt/airflow-venv" in dockerfile
-    assert '"pytest==8.3.3"' in dockerfile  # tests/test_dag.py runs inside the Airflow image, with the same constraints
+    # tests/test_dag.py runs inside the Airflow image; 8.3.4 is the version the constraints file pins (8.3.3 failed to resolve)
+    assert '"pytest==8.3.4"' in dockerfile
     path_lines = [l for l in dockerfile.splitlines() if l.startswith("ENV PATH=")]
     assert path_lines == ['ENV PATH="${PATH}:/opt/airflow-venv/bin"']  # appended last: python3 stays /usr/bin/python3
 

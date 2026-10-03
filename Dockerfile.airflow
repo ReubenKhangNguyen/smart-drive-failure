@@ -2,7 +2,7 @@
 # cluster's Python (3.8), Java (11) and Spark (3.5.1). Airflow lives in its own venv: the system python3 keeps the
 # numpy/pandas/pyyaml pins of Dockerfile.spark that the PySpark driver needs. Build the base first:
 #   docker compose build spark-master
-# 2.10.5 is the last Airflow line that supports Python 3.8 (2.11 and 3.x need >= 3.9). pytest is in the venv only
+# 2.10.5 is the last Airflow line that supports Python 3.8 (2.11 and 3.x need >= 3.9). pytest (8.3.4: the version the Airflow constraints file pins; 8.3.3 conflicts) is in the venv only
 # to run tests/test_dag.py (DAG import + dependencies) inside this image.
 ARG BASE_IMAGE=smart-drive-failure-spark:3.5.1-numpy
 FROM ${BASE_IMAGE}
@@ -17,7 +17,7 @@ RUN apt-get update \
 
 RUN python3 -m venv /opt/airflow-venv \
     && /opt/airflow-venv/bin/pip install --no-cache-dir --upgrade pip \
-    && /opt/airflow-venv/bin/pip install --no-cache-dir "apache-airflow==${AIRFLOW_VERSION}" "pytest==8.3.3" \
+    && /opt/airflow-venv/bin/pip install --no-cache-dir "apache-airflow==${AIRFLOW_VERSION}" "pytest==8.3.4" \
         --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-3.8.txt"
 
 RUN mkdir -p /opt/airflow/dags /opt/airflow/logs \
