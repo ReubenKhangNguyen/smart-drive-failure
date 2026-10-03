@@ -6,6 +6,7 @@ project:
 
 hdfs:
   namenode_url: "hdfs://namenode:9000"
+  namenode_web_url: "http://namenode:9870"
   bronze: "/smart-drive/bronze/year=2026/quarter=Q1"
   silver: "/smart-drive/silver/daily"
   features: "/smart-drive/gold/features"
