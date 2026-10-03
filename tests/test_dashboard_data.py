@@ -183,11 +183,32 @@ def test_benchmark_views_format_numbers_and_use_a_dash_for_missing_values():
     views = data.benchmark_views(df)
 
     assert list(views) == ["format", "pipeline_steps"]  # contract order, not row order
+    # columns empty for the whole experiment are dropped: the format table has no notes, the pipeline table no sizes/rows
+    assert list(views["format"].columns) == ["Biến thể", "Lần", "Trung vị (s)", "Min–Max (s)", "MB", "File", "Partition",
+                                            "Executor", "Số dòng"]
+    assert list(views["pipeline_steps"].columns) == ["Biến thể", "Lần", "Trung vị (s)", "Min–Max (s)", "Ghi chú"]
     fmt = views["format"].iloc[0]
-    assert (fmt["Lần"], fmt["Trung vị (s)"], fmt["Dung lượng (MB)"], fmt["Số file"], fmt["Số dòng"], fmt["Ghi chú"]) == (
-        "3", "40.00", "2.0", "1,234", "3,000,000", "—")
+    assert (fmt["Lần"], fmt["Trung vị (s)"], fmt["Min–Max (s)"], fmt["MB"], fmt["File"], fmt["Số dòng"]) == (
+        "3", "40.00", "39.00–41.00", "2.0", "1,234", "3,000,000")
     step = views["pipeline_steps"].iloc[0]
-    assert (step["Dung lượng (MB)"], step["Executor"], step["Số dòng"]) == ("—", "—", "—")
-    assert step["Ghi chú"] == "1 lần, không phải trung vị"
+    assert step["Ghi chú"] == "1 lần, không phải trung vị" and step["Min–Max (s)"] == "269.35–269.35"
+    # an em dash is still shown for a missing value inside a column that has some values
+    mixed = pd.DataFrame({
+        "experiment": ["format", "format"], "variant": ["a", "b"], "query": ["q", "q"], "runs": [3, 3],
+        "median_seconds": [1.0, 2.0], "min_seconds": [1.0, 2.0], "max_seconds": [1.0, 2.0], "size_bytes": [1048576.0, None],
+        "file_count": [1.0, None], "input_partitions": [1.0, None], "executors": [2.0, 2.0], "rows": [5.0, 5.0], "note": ["", "n"]})
+    assert list(data.benchmark_views(mixed)["format"]["MB"]) == ["1.0", "—"]
     assert "benchmark_environment" in data.TABLES and data.TABLES["benchmark"][1] == "HĐ9"
 
+
+def test_benchmark_labels_keep_two_workloads_of_one_variant_apart():
+    part = pd.DataFrame({
+        "variant": ["cores_2_executors_1", "cores_2_executors_1", "csv_7d"],
+        "query": ["count+groupBy(model) @ csv_7d", "count+groupBy(model) @ silver_q1", "count+groupBy(model)"],
+        "median_seconds": [7.5, 2.6, 4.3]})
+
+    labels = list(data.benchmark_chart_frame(part)["label"])
+
+    assert labels == ["cores_2_executors_1 @ csv_7d", "cores_2_executors_1 @ silver_q1", "csv_7d"]
+    assert len(set(labels)) == 3  # a bar chart keyed on this label cannot stack two measurements into one bar
+    assert data.benchmark_label("batch_pipeline/silver_etl", "pipeline step") == "batch_pipeline/silver_etl"

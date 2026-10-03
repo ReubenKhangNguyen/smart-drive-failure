@@ -24,14 +24,17 @@ benchmark = common.require("benchmark")
 if benchmark is not None and len(benchmark):
     for experiment, table in data.benchmark_views(benchmark).items():
         st.markdown("**{}**".format(data.BENCHMARK_TITLES[experiment]))
-        st.dataframe(table, use_container_width=True, hide_index=True)
-        part = benchmark[benchmark["experiment"] == experiment]
+        st.dataframe(table, use_container_width=True, hide_index=True,
+                     column_config={"Ghi chú": st.column_config.TextColumn("Ghi chú", width="large")})
+        part = data.benchmark_chart_frame(benchmark[benchmark["experiment"] == experiment])
         if len(part) > 1:
+            log_scale = experiment == "format"
             st.altair_chart(
                 alt.Chart(part).mark_bar().encode(
-                    y=alt.Y("variant:N", sort="-x", title=None, axis=alt.Axis(labelLimit=320)),
-                    x=alt.X("median_seconds:Q", title="Trung vị (giây)"),
-                    tooltip=["variant", "query", "runs", "median_seconds", "min_seconds", "max_seconds"],
+                    y=alt.Y("label:N", sort="-x", title=None, axis=alt.Axis(labelLimit=360)),
+                    x=alt.X("median_seconds:Q", title="Trung vị (giây)" + (", thang symlog" if log_scale else ""),
+                            scale=alt.Scale(type="symlog") if log_scale else alt.Scale()),
+                    tooltip=["label", "runs", "median_seconds", "min_seconds", "max_seconds"],
                 ),
                 use_container_width=True,
             )

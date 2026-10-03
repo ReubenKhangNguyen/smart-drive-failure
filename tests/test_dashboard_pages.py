@@ -264,6 +264,7 @@ def test_cluster_performance_shows_benchmark_tables_notes_and_environment(empty_
     assert "Định dạng: CSV so với Parquet" in text and "csv_7d" in text and "host_ram_gb" in text
     assert "1 lần, không phải trung vị" in text and "bộ nhớ đệm" in text
     assert "930.0" in text  # size shown in MB
+    assert "Min–Max (s)" in columns and "Ghi chú" in columns  # the notes column is present, not cut off
     assert len(at.get("arrow_vega_lite_chart")) == 1  # only the multi-row experiment (format) gets a chart
 
 
