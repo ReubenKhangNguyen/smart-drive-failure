@@ -233,3 +233,36 @@ docker compose start ui-dashboard
 
 Kiểm tra DAG import không lỗi và đúng thứ tự phụ thuộc (chạy trong container Airflow, vì Airflow không có trong image `tests`): `docker compose --profile orchestration run --rm --no-deps airflow-scheduler /opt/airflow-venv/bin/python -m pytest -q tests/test_dag.py`. Phần còn lại của test DAG (thứ tự task, script tồn tại, không đổi cỡ executor, train không đụng test) nằm trong `tests/test_dag_spec.py` và chạy trong container `tests`.
 
+## 11. Thêm một quý mới (đa quý)
+
+Một quý mới chỉ dùng để kiểm chứng mô hình đã chốt một lần (nhãn tập `oot2`, `oot3`, ...), không huấn luyện lại. Điều kiện: quý mới **liền ngay sau** quý cuối trong `data.quarters` (ví dụ Q3-2026 sau Q2-2026; hở ngày bị từ chối), và ổ C: còn trống khoảng 25 GB cho CSV và HDFS. Mỗi quý chỉ được đánh giá một lần; không bước nào xóa dữ liệu.
+
+```bash
+# 0. Khai báo quý trong config/project.yaml, thêm một khối vào data.quarters:
+#      - id: "2026-Q3"   split: "oot2"   bronze: "/smart-drive/bronze/year=2026/quarter=Q3"
+#        start_date: "2026-07-01"   end_date: "2026-09-30"
+# 1. Tải zip (chỉ tải; giải nén thủ công thành C:\dataset_smart_drive_failure\data_Q3_2026\data_Q3_2026\*.csv như Q1, Q2)
+python scripts/download_dataset.py --quarter 2026-Q3 --dest-dir C:/dataset_smart_drive_failure
+# 2. Nạp Bronze (mount cha /external_data_all đã có sẵn, không cần sửa docker-compose.yml) và kiểm kê
+python scripts/upload_to_hdfs.py --quarter 2026-Q3 \
+  --host-source-dir "C:/dataset_smart_drive_failure/data_Q3_2026/data_Q3_2026" \
+  --container-source-dir /external_data_all/data_Q3_2026/data_Q3_2026
+python scripts/verify_bronze.py --quarter 2026-Q3 --web-url http://localhost:9870   # trên host, namenode không phân giải được
+SUBMIT="docker compose exec -e PYTHONPATH=/opt/smart-drive spark-master /opt/spark/bin/spark-submit --master spark://spark-master:7077"
+$SUBMIT /opt/smart-drive/processing/spark_jobs/schema_profile.py --dir hdfs://namenode:9000/smart-drive/bronze/year=2026/quarter=Q3
+# 3. Silver: chỉ thêm các phân vùng ngày của quý mới
+$SUBMIT /opt/smart-drive/processing/spark_jobs/smart_etl.py \
+  --bronze-path hdfs://namenode:9000/smart-drive/bronze/year=2026/quarter=Q3 --silver-path hdfs://namenode:9000/smart-drive/silver/daily
+# 4. Đặc trưng của quý mới: chạy thử trước (không ghi), rồi chạy thật
+$SUBMIT /opt/smart-drive/scripts/run_oot_features.py --quarter 2026-Q3 --dry-run
+$SUBMIT /opt/smart-drive/scripts/run_oot_features.py --quarter 2026-Q3
+# 5. Đánh giá bằng mô hình đóng băng (một lần mỗi quý), chấm điểm từng ngày, xuất bảng, mở lại dashboard
+$SUBMIT /opt/smart-drive/scripts/evaluate_oot.py --quarter 2026-Q3
+$SUBMIT /opt/smart-drive/ml/score_daily.py
+$SUBMIT /opt/smart-drive/analytics/export_dashboard.py
+docker compose restart ui-dashboard
+```
+
+Kiểm tra tái lập một quý đã có (chỉ đọc, không ghi): `$SUBMIT /opt/smart-drive/scripts/check_quarter_reproduction.py --quarter 2026-Q2`.
+Chốt an toàn của `run_oot_features.py`: quý phải có đủ ngày trong Silver, và không ghi đè các ngày đang mang nhãn tập khác (Gold quý I không bao giờ bị chạm).
+
