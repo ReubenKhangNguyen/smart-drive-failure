@@ -91,3 +91,14 @@ def test_two_ranges_are_both_scored(spark):
         assert topk.count() == 2
     finally:
         base.unpersist()
+
+
+def test_scorable_ranges_has_one_range_per_configured_quarter():
+    data = dict(CFG)
+    data.pop("oot_start_date"), data.pop("oot_end_date")
+    data["quarters"] = [
+        {"id": "2026-Q2", "split": "oot", "start_date": "2026-04-01", "end_date": "2026-06-30"},
+        {"id": "2026-Q3", "split": "oot2", "start_date": "2026-07-01", "end_date": "2026-09-30"},
+    ]
+
+    assert scorable_date_ranges(data, 7) == [("2026-01-31", "2026-03-24"), ("2026-04-01", "2026-06-23"), ("2026-07-01", "2026-09-23")]

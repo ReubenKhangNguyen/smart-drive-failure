@@ -29,10 +29,16 @@ data:
   warmup_end_date: "2026-01-30"
   train_end_date: "2026-03-03"
   val_end_date: "2026-03-14"
-  # Out-of-time quarter (Q2-2026): only evaluates the frozen model, never trains or tunes.
-  oot_bronze: "/smart-drive/bronze/year=2026/quarter=Q2"
-  oot_start_date: "2026-04-01"
-  oot_end_date: "2026-06-30"
+  # Out-of-time quarters, in time order, each starting the day after the previous one (Q1 above is the first).
+  # They only evaluate the frozen model, never train or tune. To add a quarter append a block here
+  # (split: oot2, oot3, ...); see docs/quick-start.md "Them mot quy moi".
+  quarters:
+    - id: "2026-Q2"
+      split: "oot"            # kept: Gold features of Q2 already carry this label
+      bronze: "/smart-drive/bronze/year=2026/quarter=Q2"
+      start_date: "2026-04-01"
+      end_date: "2026-06-30"
+      report: "oot_metrics.json"
   required_columns:
     - date
     - serial_number

@@ -8,7 +8,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from config.settings import load_config
+from config.settings import bronze_target, load_config
 from ingestion.bronze_verifier import UPLOAD_HINT, check_listing, describe, expected_dates, list_status, parse_liststatus
 
 
@@ -16,10 +16,16 @@ def main() -> int:
     config = load_config()
     parser = argparse.ArgumentParser(description="Xac nhan Bronze da du file theo ngay (chi doc, khong nap)")
     parser.add_argument("--web-url", default=config["hdfs"]["namenode_web_url"])
-    parser.add_argument("--path", default=config["hdfs"]["bronze"])
+    parser.add_argument("--quarter", help="id quy trong data.quarters (mac dinh: quy phan tich, hdfs.bronze)")
+    parser.add_argument("--path", default=None, help="ghi de thu muc Bronze tren HDFS")
     args = parser.parse_args()
 
-    dates = expected_dates(config["data"]["start_date"], config["data"]["end_date"])
+    try:
+        target = bronze_target(config, args.quarter)
+    except ValueError as exc:
+        parser.error(str(exc))
+    args.path = args.path or target["path"]
+    dates = expected_dates(target["start_date"], target["end_date"])
     try:
         sizes = parse_liststatus(list_status(args.web_url, args.path))
     except Exception as exc:  # noqa: BLE001 - cannot verify, so do not let the DAG continue

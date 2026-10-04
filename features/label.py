@@ -58,15 +58,17 @@ def assign_split(
     train_end_date: str,
     val_end_date: str,
     oot_start_date: Optional[str] = None,
+    oot_label: str = "oot",
 ) -> DataFrame:
     """Drop the warmup period, then split chronologically: train < val < test by date.
 
     Chronological (not random) split so no row in val/test is ever from an earlier
     calendar date than a row in train — required by .claude/rules/ml-leakage.md.
 
-    With oot_start_date, every row dated on or after it is 'oot' (out-of-time: a later
-    quarter used only to evaluate the frozen model). It must never be 'test', or
-    re-running the Q1 test evaluation would silently pull the later quarter in.
+    With oot_start_date, every row dated on or after it gets oot_label ('oot' by default;
+    'oot2', ... for later quarters): out-of-time rows used only to evaluate the frozen model.
+    They must never be 'test', or re-running the Q1 test evaluation would silently pull a
+    later quarter in.
     """
     usable = df.where(F.col("date") > F.lit(warmup_end_date).cast("date"))
     split = (
@@ -75,5 +77,5 @@ def assign_split(
         .otherwise(F.lit("test"))
     )
     if oot_start_date is not None:
-        split = F.when(F.col("date") >= F.lit(oot_start_date).cast("date"), F.lit("oot")).otherwise(split)
+        split = F.when(F.col("date") >= F.lit(oot_start_date).cast("date"), F.lit(oot_label)).otherwise(split)
     return usable.withColumn("split", split)

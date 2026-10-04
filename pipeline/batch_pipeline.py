@@ -161,46 +161,79 @@ def build_steps(spark, config: Dict[str, Any]) -> List[PipelineStep]:
     ]
 
 
-def build_oot_steps(spark, config: Dict[str, Any]) -> List[PipelineStep]:
-    """Out-of-time quarter (Q2) features: only the Q2 date partitions of Gold features are
-    written (dynamic overwrite), split = 'oot'. Q1 partitions are never touched and the
-    default batch steps / Airflow DAG are unchanged (docs/decisions.md, 2026-10-04)."""
+def build_quarter_steps(
+    spark, config: Dict[str, Any], quarter_id: Optional[str] = None, dry_run: bool = False
+) -> List[PipelineStep]:
+    """Features of one out-of-time quarter (data.quarters): only that quarter's date partitions of Gold features
+    are written (dynamic overwrite), with the quarter's own split ('oot', 'oot2', ...). Earlier quarters are never
+    rewritten, and the default batch steps / Airflow DAG are unchanged (docs/decisions.md, 2026-10-04).
+
+    Guards: the whole quarter must be in Silver (no partial features), and the dates must not already hold rows of
+    another split (so Q1 train/val/test can never be overwritten). With dry_run nothing is written."""
+    import datetime as dt
+
     from pyspark.sql import functions as F
 
-    from features.oot import build_oot_features
+    from config.settings import find_quarter
+    from features.oot import build_quarter_features
 
     data_cfg = config["data"]
+    quarter = find_quarter(config, quarter_id)
     silver_path = hdfs_uri(config, "silver")
     features_path = hdfs_uri(config, "features")
+    start = F.lit(quarter["start_date"]).cast("date")
+    end = F.lit(quarter["end_date"]).cast("date")
+    expected_days = (dt.date.fromisoformat(quarter["end_date"]) - dt.date.fromisoformat(quarter["start_date"])).days + 1
 
-    def step_features_oot():
+    def step_features_quarter():
         enable_dynamic_overwrite(spark)
         silver_df = spark.read.parquet(silver_path)
-        expected_columns = [c for c in spark.read.parquet(features_path).columns if c != "date"]
 
-        out_df = build_oot_features(silver_df, data_cfg, config["project"]["horizon_days"])
+        found_days = silver_df.where((F.col("date") >= start) & (F.col("date") <= end)).select("date").distinct().count()
+        if found_days != expected_days:
+            raise ValueError("Silver has {} of the {} days of {} ({}..{}): load and clean the whole quarter first".format(
+                found_days, expected_days, quarter["id"], quarter["start_date"], quarter["end_date"]))
+
+        existing = spark.read.parquet(features_path)
+        in_range = existing.where((F.col("date") >= start) & (F.col("date") <= end))
+        foreign = in_range.where(F.col("split") != quarter["split"]).limit(1).count()
+        if foreign:
+            raise ValueError("Gold features already hold rows of another split between {} and {}; refusing to overwrite them".format(
+                quarter["start_date"], quarter["end_date"]))
+        expected_columns = [c for c in existing.columns if c != "date"]
+
+        plan = {"quarter": quarter["id"], "split": quarter["split"], "start_date": quarter["start_date"],
+                "end_date": quarter["end_date"], "silver_days": found_days,
+                "existing_feature_days": in_range.select("date").distinct().count()}
+        if dry_run:
+            plan["dry_run"] = True
+            return plan
+
+        out_df = build_quarter_features(silver_df, data_cfg, quarter, config["project"]["horizon_days"])
         got_columns = [c for c in out_df.columns if c != "date"]
         if sorted(got_columns) != sorted(expected_columns):
             raise ValueError(
-                "oot features columns differ from Gold features (HD2): only in oot={}, only in Gold={}".format(
+                "quarter features columns differ from Gold features (HD2): only in quarter={}, only in Gold={}".format(
                     sorted(set(got_columns) - set(expected_columns)), sorted(set(expected_columns) - set(got_columns))
                 )
             )
         out_df = out_df.select("date", *expected_columns).repartition("date")
         out_df.write.mode("overwrite").partitionBy("date").parquet(features_path)
 
-        written = spark.read.parquet(features_path).where(F.col("split") == "oot")
+        written = spark.read.parquet(features_path).where(F.col("split") == quarter["split"])
         stats = written.agg(
             F.count("*").alias("rows"),
             F.sum("fail_within_7_days").alias("positives"),
             F.min("date").alias("min_date"),
             F.max("date").alias("max_date"),
         ).collect()[0]
-        return {
-            "rows_out": stats["rows"],
-            "positives": stats["positives"],
-            "min_date": str(stats["min_date"]),
-            "max_date": str(stats["max_date"]),
-        }
+        plan.update(rows_out=stats["rows"], positives=stats["positives"],
+                    min_date=str(stats["min_date"]), max_date=str(stats["max_date"]))
+        return plan
 
-    return [("features_oot", step_features_oot)]
+    return [("features_{}".format(quarter["id"]), step_features_quarter)]
+
+
+def build_oot_steps(spark, config: Dict[str, Any], quarter_id: Optional[str] = None, dry_run: bool = False) -> List[PipelineStep]:
+    """Backward-compatible name of build_quarter_steps."""
+    return build_quarter_steps(spark, config, quarter_id, dry_run)
