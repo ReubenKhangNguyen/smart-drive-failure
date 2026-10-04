@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional
+
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
@@ -50,16 +52,28 @@ def build_labeled_dataset(df: DataFrame, dataset_end_date: str, horizon_days: in
     return labeled.where(F.col("label_status") == "LABELED").drop("label_status")
 
 
-def assign_split(df: DataFrame, warmup_end_date: str, train_end_date: str, val_end_date: str) -> DataFrame:
+def assign_split(
+    df: DataFrame,
+    warmup_end_date: str,
+    train_end_date: str,
+    val_end_date: str,
+    oot_start_date: Optional[str] = None,
+) -> DataFrame:
     """Drop the warmup period, then split chronologically: train < val < test by date.
 
     Chronological (not random) split so no row in val/test is ever from an earlier
     calendar date than a row in train — required by .claude/rules/ml-leakage.md.
+
+    With oot_start_date, every row dated on or after it is 'oot' (out-of-time: a later
+    quarter used only to evaluate the frozen model). It must never be 'test', or
+    re-running the Q1 test evaluation would silently pull the later quarter in.
     """
     usable = df.where(F.col("date") > F.lit(warmup_end_date).cast("date"))
-    return usable.withColumn(
-        "split",
+    split = (
         F.when(F.col("date") <= F.lit(train_end_date).cast("date"), F.lit("train"))
         .when(F.col("date") <= F.lit(val_end_date).cast("date"), F.lit("val"))
-        .otherwise(F.lit("test")),
+        .otherwise(F.lit("test"))
     )
+    if oot_start_date is not None:
+        split = F.when(F.col("date") >= F.lit(oot_start_date).cast("date"), F.lit("oot")).otherwise(split)
+    return usable.withColumn("split", split)
