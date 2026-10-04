@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import time
 from pathlib import Path
@@ -15,7 +16,7 @@ from pyspark.sql import functions as F
 
 from analytics.build_analytics import DEFAULT_EXPORT_DIR
 from analytics.health_status import WATCH_COLUMNS, baseline_failure_rate_by_level
-from config.settings import hdfs_uri, load_config
+from config.settings import hdfs_uri, load_config, quarters_from_data
 from ml.train import add_class_weight
 
 DEFAULT_REPORTS_DIR = Path(__file__).resolve().parent.parent / "artifacts" / "reports"
@@ -33,6 +34,13 @@ METRICS_SCHEMA = (
     "precision_at_k double, k int, rows bigint, positives bigint"
 )
 IMPORTANCE_SCHEMA = "model string, rank int, feature string, importance double, source string"
+CATALOG_SCHEMA = "split string, quarter_id string, label string, kind string, in_sample boolean, start_date date, end_date date"
+QUARTER_METRICS_SCHEMA = (
+    "quarter_id string, split string, segment string, model string, rows bigint, positives bigint, pr_auc double, "
+    "roc_auc double, recall_at_k double, precision_at_k double, recall_at_k_margin double, precision_at_k_margin double, "
+    "k int, model_version string, run_date string"
+)
+QUARTER_MONTHLY_SCHEMA = "quarter_id string, month string, days int, positives bigint, model string, recall_at_k double, precision_at_k double"
 
 
 # ---------- Spark-side tables ----------
@@ -240,6 +248,63 @@ def rf_importance_rows(reports_dir: Path, top_n: int = TOP_N_FEATURES) -> List[T
     return [("random_forest", int(i["rank"]), i["feature"], float(i["importance"]), RF_SOURCE) for i in items]
 
 
+# ---------- out-of-time quarters (HD11): catalog and metrics ----------
+
+def _quarter_number(day: dt.date) -> int:
+    return (day.month - 1) // 3 + 1
+
+
+def catalog_rows(data_cfg: Dict[str, Any]) -> List[Tuple[Any, ...]]:
+    """One row per split value (train, val, test of the analysis quarter, then oot, oot2, ... per configured quarter):
+    its display label, date range and whether the model has already seen it (train, val). Lets the dashboard name a
+    day's split without hard-coding the quarters."""
+    one = dt.timedelta(days=1)
+    day = dt.date.fromisoformat
+    analysis_q = "Q{}".format(_quarter_number(day(data_cfg["start_date"])))
+    analysis_id = "{}-{}".format(day(data_cfg["start_date"]).year, analysis_q)
+    warmup_end, train_end, val_end, end = (day(data_cfg[k]) for k in ("warmup_end_date", "train_end_date", "val_end_date", "end_date"))
+    rows = [
+        ("train", analysis_id, "tập huấn luyện", "analysis", True, warmup_end + one, train_end),
+        ("val", analysis_id, "tập validation", "analysis", True, train_end + one, val_end),
+        ("test", analysis_id, "tập test {}".format(analysis_q), "analysis", False, val_end + one, end),
+    ]  # type: List[Tuple[Any, ...]]
+    for quarter in quarters_from_data(data_cfg):
+        start = day(quarter["start_date"])
+        label = "Q{}/{} ngoài thời gian".format(_quarter_number(start), start.year)
+        rows.append((quarter["split"], quarter["id"], label, "out_of_time", False, start, day(quarter["end_date"])))
+    return rows
+
+
+def quarter_metric_rows(quarters: List[Dict[str, Any]], reports_dir: Path) -> Tuple[List[Tuple[Any, ...]], List[Tuple[Any, ...]]]:
+    """Rows for `quarter_metrics` and `quarter_monthly` from the report each evaluated quarter wrote
+    (scripts/evaluate_oot.py). A quarter that was not evaluated yet has no report and is skipped.
+
+    As for the Q1 test, recall@K / precision@K of the 'full' segment are NOT published (null): the censored 'tail'
+    dominates them; the headline number of a quarter is its 'normal' segment."""
+    metric_rows, monthly_rows = [], []  # type: List[Tuple[Any, ...]], List[Tuple[Any, ...]]
+    for quarter in quarters:
+        path = Path(reports_dir) / quarter["report"]
+        if not path.exists():
+            continue
+        report = json.loads(path.read_text(encoding="utf-8"))
+        k, version, run_date = int(report["k"]), report.get("model_version"), report.get("run_date")
+        for segment, part in report["segments"].items():
+            hide = segment == "full"
+            lr, rules = part["logistic_regression"], part["baseline_rules_v1"]
+            metric_rows.append((quarter["id"], quarter["split"], segment, "logistic_regression", part["rows"], part["positives"],
+                                lr.get("pr_auc"), lr.get("roc_auc"), None if hide else lr.get("recall_at_k"), None if hide else lr.get("precision_at_k"),
+                                None if hide else lr.get("recall_at_k_margin_tiebreak"), None if hide else lr.get("precision_at_k_margin_tiebreak"),
+                                k, version, run_date))
+            metric_rows.append((quarter["id"], quarter["split"], segment, "baseline_rules_v1", part["rows"], part["positives"],
+                                None, None, None if hide else rules.get("recall_at_k"), None if hide else rules.get("precision_at_k"),
+                                None, None, k, version, run_date))
+        for month in report.get("monthly_normal", []):
+            for model, key in (("logistic_regression", "logistic_regression"), ("baseline_rules_v1", "baseline_rules_v1")):
+                monthly_rows.append((quarter["id"], month["month"], int(month["days"]), int(month["positives"]), model,
+                                     month[key].get("recall_at_k"), month[key].get("precision_at_k")))
+    return metric_rows, monthly_rows
+
+
 # ---------- writing ----------
 
 def export_table(spark: SparkSession, df: DataFrame, name: str, export_root: Path) -> int:
@@ -262,6 +327,7 @@ def run(
     daily_topk_path: Optional[str] = None,
     scored_days_path: Optional[str] = None,
     analysis_end_date: Optional[str] = None,
+    data_cfg: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """analysis_end_date: last day of the quarter the analytics were built on (data.end_date). Silver may hold
     later quarters, but HD5 (rules_v1) only covers the analysis quarter, so the overview and the health
@@ -306,6 +372,15 @@ def run(
     else:
         skipped.append("model_metrics")
 
+    if data_cfg is not None:
+        tables["quarter_catalog"] = spark.createDataFrame(catalog_rows(data_cfg), CATALOG_SCHEMA)
+        metric_rows, monthly_rows = quarter_metric_rows(quarters_from_data(data_cfg), reports)
+        if metric_rows:
+            tables["quarter_metrics"] = spark.createDataFrame(metric_rows, QUARTER_METRICS_SCHEMA)
+            tables["quarter_monthly"] = spark.createDataFrame(monthly_rows, QUARTER_MONTHLY_SCHEMA)
+        else:
+            skipped.append("quarter_metrics (no evaluated out-of-time quarter yet: run scripts/evaluate_oot.py)")
+
     train_df = spark.read.parquet(features_path).where(F.col("split") == "train")
     importance = lr_importance_rows(PipelineModel.load(model_path), train_df, model_version) + rf_importance_rows(reports)
     tables["model_feature_importance"] = spark.createDataFrame(importance, IMPORTANCE_SCHEMA)
@@ -340,6 +415,7 @@ def main() -> int:
         hdfs_uri(config, "predictions_daily_topk") if "predictions_daily_topk" in config["hdfs"] else None,
         hdfs_uri(config, "scored_days") if "scored_days" in config["hdfs"] else None,
         config["data"]["end_date"],
+        config["data"],
     )
     print("Dashboard export stats:", stats)
     spark.stop()
