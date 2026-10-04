@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from config.settings import load_config
+from config.settings import bronze_target, load_config
 from ingestion.dataset_validator import validate_source_dir
 from ingestion.hdfs_loader import (
     hdfs_put_command,
@@ -26,13 +26,24 @@ def main() -> int:
     parser.add_argument("--host-source-dir", required=True, help="Thu muc chua CSV tren host, vd C:/dataset_smart_drive_failure/data_Q1_2026/data_Q1_2026")
     parser.add_argument("--container-source-dir", required=True, help="Duong dan tuong ung trong container namenode, vd /external_data/data_Q1_2026")
     parser.add_argument("--namenode-service", default="namenode")
-    parser.add_argument("--start-date", required=True)
-    parser.add_argument("--end-date", required=True)
+    parser.add_argument("--quarter", help="id quy trong data.quarters: lay khoang ngay va thu muc Bronze dich tu config")
+    parser.add_argument("--start-date", default=None, help="mac dinh lay tu --quarter")
+    parser.add_argument("--end-date", default=None, help="mac dinh lay tu --quarter")
     parser.add_argument("--skip-validation", action="store_true")
     parser.add_argument("--hdfs-target-dir", default=None, help="Thu muc Bronze tren HDFS; mac dinh lay tu config (hdfs.bronze). Dat khi nap quy khac, vd /smart-drive/bronze/year=2026/quarter=Q2")
     args = parser.parse_args()
 
     config = load_config()
+    if args.quarter:
+        try:
+            target = bronze_target(config, args.quarter)
+        except ValueError as exc:
+            parser.error(str(exc))
+        args.start_date = args.start_date or target["start_date"]
+        args.end_date = args.end_date or target["end_date"]
+        args.hdfs_target_dir = args.hdfs_target_dir or target["path"]
+    if not (args.start_date and args.end_date):
+        parser.error("can --quarter hoac ca --start-date va --end-date")
     hdfs_bronze = args.hdfs_target_dir or config["hdfs"]["bronze"]
     replication = config["hdfs"].get("bronze_replication", 1)
 

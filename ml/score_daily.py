@@ -9,23 +9,24 @@ from pyspark.sql import DataFrame, SparkSession, Window
 from pyspark.sql import functions as F
 from pyspark.storagelevel import StorageLevel
 
-from config.settings import hdfs_uri, load_config
+from config.settings import hdfs_uri, load_config, quarters_from_data
 from ml.evaluate import extract_risk_score
 
 
 def scorable_date_ranges(data_cfg: Dict[str, Any], horizon_days: int) -> List[Tuple[str, str]]:
     """Inclusive (first, last) date ranges worth scoring: every day whose full horizon is observed.
 
-    The last `horizon_days` of a quarter are excluded on purpose: Gold features keep only drives
-    already known to fail there (right-censoring), so a Top-K for those days would be trivially
-    perfect and meaningless. The first day after the warmup is the first day with features.
+    One range for the analysis quarter and one per out-of-time quarter (data.quarters). The last `horizon_days` of
+    each quarter are excluded on purpose: Gold features keep only drives already known to fail there
+    (right-censoring), so a Top-K for those days would be trivially perfect and meaningless. The first day after
+    the warmup is the first day with features.
     """
     gap = dt.timedelta(days=horizon_days)
     one = dt.timedelta(days=1)
     first = dt.date.fromisoformat(data_cfg["warmup_end_date"]) + one
     ranges = [(first.isoformat(), (dt.date.fromisoformat(data_cfg["end_date"]) - gap).isoformat())]
-    if data_cfg.get("oot_start_date") and data_cfg.get("oot_end_date"):
-        ranges.append((data_cfg["oot_start_date"], (dt.date.fromisoformat(data_cfg["oot_end_date"]) - gap).isoformat()))
+    for quarter in quarters_from_data(data_cfg):
+        ranges.append((quarter["start_date"], (dt.date.fromisoformat(quarter["end_date"]) - gap).isoformat()))
     return ranges
 
 
