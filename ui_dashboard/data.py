@@ -126,6 +126,7 @@ def topk_display(topk: pd.DataFrame, notes: Dict[str, str]) -> pd.DataFrame:
     """Top-K table with Vietnamese column names; `notes` maps serial -> conflict explanation (short)."""
     out = topk.sort_values("risk_rank").copy()
     out["reasons"] = out["reasons"].map(reasons_text)
+    out["health_level"] = out["health_level"].where(out["health_level"].notna(), "(không có)")
     out["note"] = out["serial_number"].map(lambda s: notes.get(s, ""))
     columns = ["risk_rank", "serial_number", "model", "risk_score", "health_level", "reasons", "note"]
     if "failed_within_7d" in out.columns:  # per-day tables know the outcome in hindsight

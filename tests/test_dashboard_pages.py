@@ -398,3 +398,4 @@ def test_failure_prediction_day_without_rules_says_so_instead_of_claiming_zero_c
     assert any("chưa được tính cho ngày này" in str(i.value) for i in at.info)
     assert "ổ CRITICAL, trong đó" not in text  # no made-up "0 CRITICAL" sentence for a day the rules never saw
     assert "SN_10_A" in text and "Nhìn lại: trong Top-100 có 7 ổ thực tế hỏng" in text
+    assert "(không có)" in text and "None" not in text  # an empty level reads as such, not as a stray "None"
