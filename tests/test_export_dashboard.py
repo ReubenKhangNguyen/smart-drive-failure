@@ -249,3 +249,33 @@ def test_run_exports_all_hd8_tables(spark, tmp_path):
     assert not imp.duplicated(["model", "rank"]).any()
     topk = pd.read_parquet(str(tmp_path / "dashboard" / "predictions_topk.parquet"))
     assert list(topk["risk_rank"]) == [1, 2]
+
+
+def test_run_scopes_overview_and_health_distribution_to_the_analysis_quarter(spark, tmp_path):
+    """Silver may hold a later quarter, but HD5 only covers the analysis quarter: without the cut the dataset
+    end moves and the published numbers change."""
+    names = ("silver", "health", "preds", "features", "model")
+    paths = {n: (tmp_path / n).as_uri() for n in names}
+    _silver(spark).write.parquet(paths["silver"])
+    _health(spark).write.parquet(paths["health"])
+    _predictions(spark).write.parquet(paths["preds"])
+    train_df, model = _lr_fixture(spark)
+    train_df.withColumn("split", F.lit("train")).write.parquet(paths["features"])
+    model.save(paths["model"])
+    reports = tmp_path / "reports"
+    reports.mkdir()
+
+    full = tmp_path / "full"
+    run(spark, paths["silver"], paths["health"], paths["preds"], paths["features"], paths["model"],
+        "vtest", 2, reports_dir=reports, export_dir=full)
+    cut = tmp_path / "cut"
+    run(spark, paths["silver"], paths["health"], paths["preds"], paths["features"], paths["model"],
+        "vtest", 2, reports_dir=reports, export_dir=cut, analysis_end_date="2026-01-10")
+
+    full_overview = pd.read_parquet(str(full / "dashboard_overview.parquet")).iloc[0]
+    cut_overview = pd.read_parquet(str(cut / "dashboard_overview.parquet")).iloc[0]
+    assert str(cut_overview["data_end"]) == "2026-01-10" and str(full_overview["data_end"]) != "2026-01-10"
+    assert int(cut_overview["drive_days"]) < int(full_overview["drive_days"])
+    full_dist = pd.read_parquet(str(full / "health_distribution.parquet"))
+    cut_dist = pd.read_parquet(str(cut / "health_distribution.parquet"))
+    assert full_dist["labeled_rows"].sum() != cut_dist["labeled_rows"].sum()  # the censoring boundary moved with the cut

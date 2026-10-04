@@ -261,20 +261,29 @@ def run(
     export_dir: Any = None,
     daily_topk_path: Optional[str] = None,
     scored_days_path: Optional[str] = None,
+    analysis_end_date: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """analysis_end_date: last day of the quarter the analytics were built on (data.end_date). Silver may hold
+    later quarters, but HD5 (rules_v1) only covers the analysis quarter, so the overview and the health
+    distribution are computed on Silver up to that day: otherwise the end of the dataset moves and the
+    published Q1 numbers (rows kept after right-censoring, 7-day failure rates) silently change."""
     start = time.time()
     reports = Path(reports_dir) if reports_dir else DEFAULT_REPORTS_DIR
     export_root = Path(export_dir) if export_dir else DEFAULT_EXPORT_DIR
 
     silver_df = spark.read.parquet(silver_path)
+    analysis_silver = (
+        silver_df if analysis_end_date is None
+        else silver_df.where(F.col("date") <= F.lit(analysis_end_date).cast("date"))
+    )
     health_df = spark.read.parquet(health_status_path)
     predictions_df = spark.read.parquet(predictions_path)
     scored_date = predictions_df.agg(F.max("date")).collect()[0][0]
 
     topk_df = build_predictions_topk(predictions_df, health_df, scored_date).cache()
     tables = {
-        "dashboard_overview": build_overview(silver_df, predictions_df, model_version, k),
-        "health_distribution": build_health_distribution(silver_df, health_df),
+        "dashboard_overview": build_overview(analysis_silver, predictions_df, model_version, k),
+        "health_distribution": build_health_distribution(analysis_silver, health_df),
         "health_snapshot": build_health_snapshot(health_df, scored_date),
         "predictions_topk": topk_df,
         "smart_history_topk": build_smart_history(silver_df, topk_df, scored_date),
@@ -330,6 +339,7 @@ def main() -> int:
         args.export_dir,
         hdfs_uri(config, "predictions_daily_topk") if "predictions_daily_topk" in config["hdfs"] else None,
         hdfs_uri(config, "scored_days") if "scored_days" in config["hdfs"] else None,
+        config["data"]["end_date"],
     )
     print("Dashboard export stats:", stats)
     spark.stop()
