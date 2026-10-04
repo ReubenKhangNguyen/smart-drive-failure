@@ -29,10 +29,11 @@ def main() -> int:
     parser.add_argument("--start-date", required=True)
     parser.add_argument("--end-date", required=True)
     parser.add_argument("--skip-validation", action="store_true")
+    parser.add_argument("--hdfs-target-dir", default=None, help="Thu muc Bronze tren HDFS; mac dinh lay tu config (hdfs.bronze). Dat khi nap quy khac, vd /smart-drive/bronze/year=2026/quarter=Q2")
     args = parser.parse_args()
 
     config = load_config()
-    hdfs_bronze = config["hdfs"]["bronze"]
+    hdfs_bronze = args.hdfs_target_dir or config["hdfs"]["bronze"]
     replication = config["hdfs"].get("bronze_replication", 1)
 
     host_source_dir = Path(args.host_source_dir)
