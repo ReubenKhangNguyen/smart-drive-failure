@@ -13,6 +13,8 @@ hdfs:
   analytics: "/smart-drive/gold/analytics"
   predictions: "/smart-drive/gold/predictions"
   health_status: "/smart-drive/gold/health_status"
+  predictions_daily_topk: "/smart-drive/gold/predictions_daily_topk"
+  scored_days: "/smart-drive/gold/scored_days"
   models_base: "/smart-drive/models"
   streaming_output: "/smart-drive/streaming_output"
   streaming_checkpoint: "/smart-drive/streaming_checkpoint"
