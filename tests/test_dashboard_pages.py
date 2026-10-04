@@ -306,3 +306,95 @@ def test_smart_analysis_shows_no_such_note_when_those_columns_are_absent(empty_d
     assert not at.exception
     assert not [c for c in at.caption if "gần 100%" in str(c.value)]
 
+
+
+def _fill_daily(dashboard):
+    """Per-day tables behind the date picker (HD10): one train, one val and one test day."""
+    days = [("2026-02-10", "train", 340000, 70, 12), ("2026-03-10", "val", 350000, 60, 9), ("2026-03-24", "test", 342662, 55, 5),
+            ("2026-04-10", "oot", 354000, 80, 7)]
+    _w(dashboard, "scored_days", pd.DataFrame({
+        "score_date": [d[0] for d in days], "split": [d[1] for d in days], "scored_rows": [d[2] for d in days],
+        "positives": [d[3] for d in days], "topk_hits": [d[4] for d in days], "critical_total": [8, 7, 6, None],
+        "critical_in_topk": [2, 1, 1, None], "model_version": ["vtest"] * 4}).astype(
+        {"critical_total": "float64", "critical_in_topk": "float64"}))
+    topk = []
+    for date, _split, *_rest in days:
+        no_rules = date == "2026-04-10"  # Q2: HD5 was never computed, so the level is null
+        for rank, (serial, level, failed) in enumerate((("SN_" + date[-2:] + "_A", "CRITICAL", 1), ("SN_" + date[-2:] + "_B", "HEALTHY", 0)), 1):
+            topk.append({"score_date": date, "risk_rank": rank, "serial_number": serial, "model": "M1", "risk_score": 0.9 - rank / 10,
+                         "failed_within_7d": failed, "health_level": None if no_rules else level,
+                         "reasons": None if no_rules else np.array(["smart_5_raw >= 102"] if level == "CRITICAL" else [], dtype=object),
+                         "model_version": "vtest"})
+    _w(dashboard, "predictions_topk_daily", pd.DataFrame(topk))
+    history = [{"score_date": t["score_date"], "serial_number": t["serial_number"], "date": t["score_date"], "smart_5_raw": 1,
+                "smart_187_raw": None, "smart_197_raw": 0, "smart_198_raw": 0} for t in topk]
+    _w(dashboard, "smart_history_daily_topk", pd.DataFrame(history).astype({"smart_187_raw": "float64"}))
+
+
+def test_failure_prediction_without_daily_tables_has_no_date_picker(empty_dirs):
+    _fill(*empty_dirs)
+
+    at = _page("failure_prediction").run()
+
+    assert not at.exception
+    assert not [s for s in at.selectbox if s.key == "score_date"]
+
+
+def test_failure_prediction_date_picker_defaults_to_the_scored_day_and_shows_hindsight(empty_dirs):
+    dashboard, reports = empty_dirs
+    _fill(dashboard, reports)
+    _fill_daily(dashboard)
+
+    at = _page("failure_prediction").run()
+    text = _texts(at)
+
+    assert not at.exception, [e.value for e in at.exception]
+    picker = at.selectbox(key="score_date")
+    assert picker.value == "2026-03-24"  # the overview scored_date
+    assert len(picker.options) == 4
+    assert [o[:10] for o in picker.options] == ["2026-02-10", "2026-03-10", "2026-03-24", "2026-04-10"]  # sorted by date
+    assert "tập huấn luyện" in picker.options[0] and "tập test Q1" in picker.options[2]  # each day names its split
+    assert "Nhìn lại: trong Top-100 có 5 ổ thực tế hỏng" in text
+    assert "SN_24_A" in text and "SN_10_A" not in text  # only the picked day's drives
+    assert "Thực tế (hỏng trong 7 ngày sau)" in text
+
+
+def test_failure_prediction_warns_when_the_picked_day_is_in_the_training_set(empty_dirs):
+    dashboard, reports = empty_dirs
+    _fill(dashboard, reports)
+    _fill_daily(dashboard)
+
+    at = _page("failure_prediction").run()
+    at.selectbox(key="score_date").select("2026-02-10").run()
+
+    assert not at.exception, [e.value for e in at.exception]
+    assert any("tập huấn luyện" in str(w.value) and "Không dùng để đánh giá" in str(w.value) for w in at.warning)
+    text = _texts(at)
+    assert "SN_10_A" in text and "SN_24_A" not in text
+    assert "Trong ngày này luật xếp 8 ổ CRITICAL, trong đó 2 ổ nằm trong Top-100" in text  # per-day CRITICAL counts
+
+
+def test_failure_prediction_out_of_sample_day_gets_an_info_note_not_a_warning(empty_dirs):
+    dashboard, reports = empty_dirs
+    _fill(dashboard, reports)
+    _fill_daily(dashboard)
+
+    at = _page("failure_prediction").run()
+
+    assert not any("Không dùng để đánh giá" in str(w.value) for w in at.warning)
+    assert any("ngoài dữ liệu huấn luyện" in str(i.value) for i in at.info)
+
+
+def test_failure_prediction_day_without_rules_says_so_instead_of_claiming_zero_critical(empty_dirs):
+    dashboard, reports = empty_dirs
+    _fill(dashboard, reports)
+    _fill_daily(dashboard)
+
+    at = _page("failure_prediction").run()
+    at.selectbox(key="score_date").select("2026-04-10").run()
+    text = _texts(at)
+
+    assert not at.exception, [e.value for e in at.exception]
+    assert any("chưa được tính cho ngày này" in str(i.value) for i in at.info)
+    assert "ổ CRITICAL, trong đó" not in text  # no made-up "0 CRITICAL" sentence for a day the rules never saw
+    assert "SN_10_A" in text and "Nhìn lại: trong Top-100 có 7 ổ thực tế hỏng" in text

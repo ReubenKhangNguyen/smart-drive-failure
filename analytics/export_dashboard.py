@@ -103,6 +103,77 @@ def build_smart_history(silver_df: DataFrame, topk_df: DataFrame, scored_date: A
     )
 
 
+def build_daily_exports(
+    silver_df: DataFrame,
+    health_df: DataFrame,
+    topk_daily_df: DataFrame,
+    days_df: DataFrame,
+    history_days: int = HISTORY_DAYS,
+) -> Dict[str, DataFrame]:
+    """Tables behind the dashboard date picker (HD10): the Top-K of EVERY scorable day, not just one.
+
+    predictions_topk_daily (score_date, risk_rank): Top-K with the rules_v1 level of that day and, in
+      hindsight, whether the drive failed within 7 days.
+    scored_days (score_date): day-level counts, incl. how many CRITICAL drives the rules flagged and how
+      many of them are inside the Top-K (null when HD5 has no row for that day).
+    smart_history_daily_topk (score_date, serial_number, date): the `history_days` days of SMART values
+      up to each score_date for that day's Top-K drives.
+    """
+    health = health_df.select(F.col("date"), "serial_number", "health_level", "reasons")
+    topk = (
+        topk_daily_df.join(health, ["serial_number", "date"], "left")
+        .select(
+            F.col("date").alias("score_date"), "risk_rank", "serial_number", "model", "risk_score",
+            "failed_within_7d", "health_level", "reasons", "model_version",
+        )
+    )
+
+    # rules_v1 (HD5) may not exist for a day (it was only computed for Q1): then the CRITICAL counts are null,
+    # never 0, or the dashboard would claim "the rules flagged no CRITICAL drive" for a day they never saw.
+    health_days = (
+        health_df.join(days_df.select("date"), "date")
+        .groupBy("date")
+        .agg(
+            F.count("*").cast("bigint").alias("health_rows"),
+            F.sum(F.when(F.col("health_level") == "CRITICAL", 1).otherwise(0)).cast("bigint").alias("critical_total"),
+        )
+    )
+    critical_in_topk = (
+        topk.where(F.col("health_level") == "CRITICAL")
+        .groupBy("score_date").agg(F.count("*").cast("bigint").alias("critical_in_topk"))
+        .withColumnRenamed("score_date", "date")
+    )
+    has_rules = F.col("health_rows").isNotNull()
+    days = (
+        days_df.join(health_days, "date", "left").join(critical_in_topk, "date", "left")
+        .select(
+            F.col("date").alias("score_date"), "split", "scored_rows", "positives", "topk_hits",
+            F.when(has_rules, F.col("critical_total")).alias("critical_total"),
+            F.when(has_rules, F.coalesce(F.col("critical_in_topk"), F.lit(0).cast("bigint"))).alias("critical_in_topk"),
+            "model_version",
+        )
+        .orderBy("score_date")
+    )
+
+    pairs = topk.select("score_date", "serial_number")
+    serials = pairs.select("serial_number").distinct()
+    smart = (
+        silver_df.join(F.broadcast(serials), "serial_number")
+        .select("serial_number", "date", *[F.col(c).cast("bigint").alias(c) for c in WATCH_COLUMNS])
+    )
+    history = (
+        pairs.join(smart, "serial_number")
+        .where((F.col("date") <= F.col("score_date")) & (F.col("date") > F.date_sub(F.col("score_date"), history_days)))
+        .select("score_date", "serial_number", "date", *WATCH_COLUMNS)
+        .orderBy("score_date", "serial_number", "date")
+    )
+    return {
+        "predictions_topk_daily": topk.orderBy("score_date", "risk_rank"),
+        "scored_days": days,
+        "smart_history_daily_topk": history,
+    }
+
+
 # ---------- pure-Python tables (metrics, importance) ----------
 
 def model_metrics_rows(metrics: Dict[str, Any], breakdown: Dict[str, Any]) -> List[Tuple[Any, ...]]:
@@ -188,6 +259,8 @@ def run(
     k: int,
     reports_dir: Any = None,
     export_dir: Any = None,
+    daily_topk_path: Optional[str] = None,
+    scored_days_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     start = time.time()
     reports = Path(reports_dir) if reports_dir else DEFAULT_REPORTS_DIR
@@ -208,6 +281,14 @@ def run(
     }
 
     skipped = []  # type: List[str]
+    if daily_topk_path and scored_days_path:
+        try:
+            daily = build_daily_exports(
+                silver_df, health_df, spark.read.parquet(daily_topk_path), spark.read.parquet(scored_days_path)
+            )
+            tables.update(daily)
+        except Exception as exc:  # noqa: BLE001 - missing Gold daily tables must not stop the single-day export
+            skipped.append("daily tables ({}): chay ml/score_daily.py truoc".format(type(exc).__name__))
     metrics_path, breakdown_path = reports / "metrics.json", reports / "test_breakdown.json"
     if metrics_path.exists() and breakdown_path.exists():
         rows = model_metrics_rows(json.loads(metrics_path.read_text(encoding="utf-8")),
@@ -247,6 +328,8 @@ def main() -> int:
         config["ml"]["k"],
         args.reports_dir,
         args.export_dir,
+        hdfs_uri(config, "predictions_daily_topk") if "predictions_daily_topk" in config["hdfs"] else None,
+        hdfs_uri(config, "scored_days") if "scored_days" in config["hdfs"] else None,
     )
     print("Dashboard export stats:", stats)
     spark.stop()
