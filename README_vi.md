@@ -173,6 +173,9 @@ K = 3 chọn theo silhouette (0,6870) **sau khi** tách nhóm `zero_signal` (c�
 > [!NOTE]
 > `risk_score` là **điểm xếp hạng** của mô hình có trọng số lớp, không phải xác suất đã hiệu chỉnh. Nhiều ổ bão hòa ở 1,0 nên khi hòa điểm sẽ xếp theo margin của mô hình, và recall@100 phụ thuộc cách chia hòa (9,21 % so với 9,06 % trên validation).
 
+> [!TIP]
+> **Ô chọn ngày và quý kế tiếp.** Trang dự đoán có ô chọn ngày: chọn bất kỳ ngày nào có đủ 7 ngày tương lai để xem Top-100 của ngày đó, mức tình trạng của `rules_v1`, thực tế từng ổ trong danh sách sau đó ra sao và lịch sử SMART. Mỗi ngày được gắn tên tập dữ liệu, và ngày thuộc tập huấn luyện hoặc validation có cảnh báo vì mô hình đã nhìn thấy chúng. Mô hình đóng băng cũng đã được kiểm tra đúng một lần trên quý kế tiếp (Q2-2026, ngoài thời gian): trên đoạn `normal` đạt recall@100 **8,23 %** và precision@100 **9,32 %**, so với 2,12 % và 2,68 % của luật; chi tiết và giới hạn ở [`oot_evaluation.md`](docs/results/oot_evaluation.md). Để làm mới ô chọn ngày, chạy `ml/score_daily.py` rồi `analytics/export_dashboard.py` (xem [Bắt đầu nhanh](#quick-start)).
+
 <p align="center"><img src="docs/images/failure_prediction.png" alt="Trang dự đoán hỏng" width="92%"></p>
 
 ### ⚡ Hiệu năng và streaming
@@ -258,6 +261,7 @@ $SUBMIT /opt/smart-drive/scripts/run_scoring_pipeline.py --date 2026-03-24   # G
 
 ```bash
 $SUBMIT /opt/smart-drive/analytics/kmeans_segmentation.py    # khoảng 8-12 phút
+$SUBMIT /opt/smart-drive/ml/score_daily.py                   # Top-100 mỗi ngày đủ điều kiện (ô chọn ngày)
 $SUBMIT /opt/smart-drive/analytics/export_dashboard.py       # cần Gold predictions
 docker compose restart ui-dashboard                          # http://localhost:8501
 ```

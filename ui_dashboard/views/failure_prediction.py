@@ -3,7 +3,9 @@ import pandas as pd
 import streamlit as st
 
 from ui_dashboard import common, data
-from ui_dashboard.explain import RISK_SCORE_NOTE, SCORED_DAY_NOTE, TAIL_NOTE, conflict_note, missing_flag_note, tie_note
+from ui_dashboard.explain import (
+    DAILY_PICKER_NOTE, IN_SAMPLE_NOTE, NO_RULES_NOTE, OUT_SAMPLE_NOTE, RISK_SCORE_NOTE, SCORED_DAY_NOTE, TAIL_NOTE, conflict_note,
+    missing_flag_note, tie_note)
 
 SMART_COLUMNS = ["smart_5_raw", "smart_187_raw", "smart_197_raw", "smart_198_raw"]
 
@@ -16,10 +18,40 @@ overview, _ = common.load("dashboard_overview")
 k = int(overview.iloc[0]["k"]) if overview is not None and len(overview) else 100
 scored_date = str(overview.iloc[0]["scored_date"]) if overview is not None and len(overview) else None
 
+# Date picker: only when the per-day tables were exported (analytics/export_dashboard.py after ml/score_daily.py).
+days_df, _ = common.load("scored_days")
+daily_topk, _ = common.load("predictions_topk_daily")
+daily_history, _ = common.load("smart_history_daily_topk")
+daily = days_df is not None and daily_topk is not None and daily_history is not None and len(days_df) > 0
+day = None
+if daily:
+    days_df = days_df.sort_values("score_date")
+    options = [str(d) for d in days_df["score_date"]]
+    split_of = dict(zip(options, days_df["split"]))
+    default = scored_date if scored_date in options else options[-1]
+    scored_date = st.selectbox(
+        "Ngày chấm điểm", options, index=options.index(default), key="score_date",
+        format_func=lambda d: "{} ({})".format(d, data.SPLIT_LABELS.get(split_of[d], split_of[d])))
+    day = days_df[days_df["score_date"].astype(str) == scored_date].iloc[0]
+
 st.subheader("Top-{} ổ có điểm rủi ro cao nhất".format(k) + (", ngày {}".format(scored_date) if scored_date else ""))
-st.caption(SCORED_DAY_NOTE)
-topk = common.require("predictions_topk")
-snapshot, _ = common.load("health_snapshot")
+if daily:
+    st.caption(DAILY_PICKER_NOTE)
+    label = data.SPLIT_LABELS.get(day["split"], day["split"])
+    if day["split"] in data.IN_SAMPLE_SPLITS:
+        st.warning(IN_SAMPLE_NOTE.format(label))
+    else:
+        st.info(OUT_SAMPLE_NOTE.format(label))
+    st.caption("{:,} ổ được chấm điểm trong ngày. {}".format(int(day["scored_rows"]), data.day_hindsight(day, k)))
+    topk = daily_topk[daily_topk["score_date"].astype(str) == scored_date].copy()
+    topk["alert"] = True
+    if pd.isna(day["critical_total"]):
+        st.info(NO_RULES_NOTE)
+    snapshot = None
+else:
+    st.caption(SCORED_DAY_NOTE)
+    topk = common.require("predictions_topk")
+    snapshot, _ = common.load("health_snapshot")
 if topk is not None and len(topk):
     notes = {}
     for _, row in topk.iterrows():
@@ -33,7 +65,7 @@ if topk is not None and len(topk):
     if ties:
         st.warning(ties)
 
-    summary = data.conflict_summary(topk, snapshot)
+    summary = data.daily_conflict_summary(topk, day) if daily else data.conflict_summary(topk, snapshot)
     st.markdown("**Top-K × mức tình trạng của luật**")
     rows = [(level, summary["topk_by_level"].get(level, 0)) for level in data.HEALTH_ORDER + ["(không có)"]
             if summary["topk_by_level"].get(level, 0)]
@@ -54,7 +86,10 @@ if topk is not None and len(topk):
     kind, text = conflict_note(level, bool(chosen["alert"]), k)
     if text:
         {"conflict": st.error, "agree": st.success}.get(kind, st.info)(text)
-    history = common.require("smart_history_topk")
+    if daily:
+        history = daily_history[daily_history["score_date"].astype(str) == scored_date]
+    else:
+        history = common.require("smart_history_topk")
     if history is not None:
         one = history[history["serial_number"] == serial].sort_values("date")
         if len(one):

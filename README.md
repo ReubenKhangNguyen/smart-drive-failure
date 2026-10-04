@@ -173,6 +173,9 @@ K = 3 chosen by silhouette (0.6870) **after** separating the `zero_signal` group
 > [!NOTE]
 > `risk_score` is a **ranking score** from a class-weighted model, not a calibrated probability. Many drives saturate at 1.0, so ties are broken by the model margin, and recall@100 depends on the tie-break rule (9.21 % vs. 9.06 % on validation).
 
+> [!TIP]
+> **Date picker and the next quarter.** The prediction page has a date picker: choose any day whose full 7-day horizon is observed to see that day's Top-100, the `rules_v1` level, what actually happened to each listed drive afterwards, and its SMART history. Every day is labelled with its split, and days from the training or validation set carry a warning because the model has already seen them. The frozen model was also checked once on the next quarter (Q2-2026, out-of-time): on its `normal` segment it reaches recall@100 **8.23 %** and precision@100 **9.32 %** against 2.12 % and 2.68 % for the rules; details and caveats in [`oot_evaluation.md`](docs/results/oot_evaluation.md). To refresh the picker run `ml/score_daily.py`, then `analytics/export_dashboard.py` (see [Quick start](#quick-start)).
+
 <p align="center"><img src="docs/images/failure_prediction.png" alt="Failure prediction page" width="92%"></p>
 
 ### ⚡ Performance and streaming
@@ -258,6 +261,7 @@ $SUBMIT /opt/smart-drive/scripts/run_scoring_pipeline.py --date 2026-03-24   # G
 
 ```bash
 $SUBMIT /opt/smart-drive/analytics/kmeans_segmentation.py    # about 8-12 minutes
+$SUBMIT /opt/smart-drive/ml/score_daily.py                   # Top-100 of every scorable day (date picker)
 $SUBMIT /opt/smart-drive/analytics/export_dashboard.py       # needs Gold predictions
 docker compose restart ui-dashboard                          # http://localhost:8501
 ```

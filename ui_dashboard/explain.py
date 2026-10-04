@@ -9,6 +9,21 @@ RISK_SCORE_NOTE = (
     "không đọc điểm như \"x% khả năng hỏng\"."
 )
 
+DAILY_PICKER_NOTE = (
+    "Chọn ngày chấm điểm: chỉ liệt kê ngày có đủ 7 ngày tương lai để quan sát (bảy ngày cuối mỗi quý bị loại vì chỉ còn ổ đã "
+    "xác nhận hỏng, Top-K của những ngày đó luôn đúng một cách tầm thường). Cột “Thực tế” và dòng “Nhìn lại” chỉ để xem lại kết quả "
+    "của riêng ngày đó, không phải chỉ số đánh giá mô hình; chỉ số chính nằm ở mục Chất lượng mô hình bên dưới."
+)
+IN_SAMPLE_NOTE = (
+    "Ngày này thuộc {} của Q1: mô hình đã nhìn thấy dữ liệu này khi huấn luyện hoặc được chọn, nên Top-K ở đây nhìn lại dữ liệu đã biết "
+    "và thường đẹp hơn thực tế. Không dùng để đánh giá chất lượng; hãy chọn ngày thuộc tập test Q1 hoặc Q2."
+)
+NO_RULES_NOTE = (
+    "Luật rules_v1 chưa được tính cho ngày này (bảng tình trạng ổ mới có cho Q1), nên cột “Mức tình trạng” để trống và "
+    "không có thống kê số ổ CRITICAL của ngày. Điểm rủi ro và cột “Thực tế” vẫn đúng."
+)
+OUT_SAMPLE_NOTE = "Ngày này nằm ngoài dữ liệu huấn luyện của mô hình ({})."
+
 SCORED_DAY_NOTE = (
     "Ngày chấm điểm được chọn để minh họa dashboard (ngày cuối dataset 2026-03-31 chỉ còn ổ đã xác nhận hỏng, "
     "không đại diện). Ngày này nằm trong tập test nhưng không dùng để đánh giá lại hay chọn mô hình."

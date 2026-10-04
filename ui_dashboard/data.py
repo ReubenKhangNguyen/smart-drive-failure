@@ -49,7 +49,17 @@ DISPLAY_COLUMNS = {
     "health_level": "Mức tình trạng",
     "reasons": "Lý do (luật rules_v1)",
     "note": "Ghi chú",
+    "outcome": "Thực tế (hỏng trong 7 ngày sau)",
 }
+
+# Ngay chon duoc trong o chon ngay: ten tap du lieu cua ngay do, de nguoi xem biet diem co phai "ngoai mau" khong.
+SPLIT_LABELS = {
+    "train": "tập huấn luyện",
+    "val": "tập validation",
+    "test": "tập test Q1",
+    "oot": "Q2 ngoài thời gian",
+}
+IN_SAMPLE_SPLITS = ("train", "val")
 
 
 def dashboard_dir() -> Path:
@@ -117,9 +127,11 @@ def topk_display(topk: pd.DataFrame, notes: Dict[str, str]) -> pd.DataFrame:
     out = topk.sort_values("risk_rank").copy()
     out["reasons"] = out["reasons"].map(reasons_text)
     out["note"] = out["serial_number"].map(lambda s: notes.get(s, ""))
-    return out[["risk_rank", "serial_number", "model", "risk_score", "health_level", "reasons", "note"]].rename(
-        columns=DISPLAY_COLUMNS
-    )
+    columns = ["risk_rank", "serial_number", "model", "risk_score", "health_level", "reasons", "note"]
+    if "failed_within_7d" in out.columns:  # per-day tables know the outcome in hindsight
+        out["outcome"] = out["failed_within_7d"].map(lambda v: "Có" if v == 1 else "Không")
+        columns.append("outcome")
+    return out[columns].rename(columns=DISPLAY_COLUMNS)
 
 
 def conflict_summary(topk: pd.DataFrame, snapshot: Optional[pd.DataFrame]) -> Dict[str, Any]:
@@ -132,6 +144,26 @@ def conflict_summary(topk: pd.DataFrame, snapshot: Optional[pd.DataFrame]) -> Di
         summary.update(critical_total=len(critical), critical_in_topk=len(in_topk),
                        critical_outside_topk=len(critical) - len(in_topk))
     return summary
+
+
+def daily_conflict_summary(topk: pd.DataFrame, day: pd.Series) -> Dict[str, Any]:
+    """conflict_summary for a picked day: the per-day table already carries the CRITICAL counts."""
+    summary = conflict_summary(topk, None)
+    if pd.isna(day["critical_total"]):  # no rules_v1 rows for this day: say nothing rather than "0 CRITICAL"
+        return summary
+    total, inside = int(day["critical_total"]), int(day["critical_in_topk"])
+    summary.update(critical_total=total, critical_in_topk=inside, critical_outside_topk=total - inside)
+    return summary
+
+
+def day_hindsight(day: pd.Series, k: int) -> str:
+    """One sentence about how the Top-K of a day turned out, in hindsight (descriptive, not an evaluation)."""
+    hits, positives = int(day["topk_hits"]), int(day["positives"])
+    text = "Nhìn lại: trong Top-{} có {} ổ thực tế hỏng trong 7 ngày sau (precision {:.1f}%); toàn ngày có {:,} ổ hỏng trong 7 ngày sau".format(
+        k, hits, hits / k * 100 if k else 0.0, positives)
+    if positives:
+        text += " (recall {:.1f}%)".format(hits / positives * 100)
+    return text + "."
 
 
 def metrics_views(metrics: pd.DataFrame) -> Dict[str, pd.DataFrame]:
