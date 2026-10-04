@@ -399,3 +399,71 @@ def test_failure_prediction_day_without_rules_says_so_instead_of_claiming_zero_c
     assert "ổ CRITICAL, trong đó" not in text  # no made-up "0 CRITICAL" sentence for a day the rules never saw
     assert "SN_10_A" in text and "Nhìn lại: trong Top-100 có 7 ổ thực tế hỏng" in text
     assert "(không có)" in text and "None" not in text  # an empty level reads as such, not as a stray "None"
+
+
+def _fill_quarters(dashboard):
+    """Tables of HD11: split names and the out-of-time quarters already evaluated."""
+    _w(dashboard, "quarter_catalog", pd.DataFrame({
+        "split": ["train", "val", "test", "oot"], "quarter_id": ["2026-Q1"] * 3 + ["2026-Q2"],
+        "label": ["tập huấn luyện", "tập validation", "tập test Q1", "Q2/2026 ngoài thời gian"],
+        "kind": ["analysis"] * 3 + ["out_of_time"], "in_sample": [True, True, False, False]}))
+    rows = []
+    for segment, lr, rules in (("normal", (0.0823, 0.0932), (0.0212, 0.0268)), ("tail", (1.0, 1.0), (1.0, 1.0))):
+        for model, (recall, precision) in (("logistic_regression", lr), ("baseline_rules_v1", rules)):
+            rows.append({"quarter_id": "2026-Q2", "split": "oot", "segment": segment, "model": model, "rows": 1000, "positives": 20,
+                         "pr_auc": 0.0277 if model == "logistic_regression" and segment == "normal" else None,
+                         "roc_auc": 0.8485 if model == "logistic_regression" and segment == "normal" else None,
+                         "recall_at_k": recall, "precision_at_k": precision, "k": 100})
+    _w(dashboard, "quarter_metrics", pd.DataFrame(rows))
+    _w(dashboard, "quarter_monthly", pd.DataFrame([
+        {"quarter_id": "2026-Q2", "month": month, "days": days, "positives": positives, "model": model, "recall_at_k": r, "precision_at_k": p}
+        for month, days, positives, lr, ru in (("2026-04", 30, 12, (0.0853, 0.1213), (0.0367, 0.0523)), ("2026-05", 31, 8, (0.0975, 0.101), (0.0132, 0.0152)))
+        for model, (r, p) in (("logistic_regression", lr), ("baseline_rules_v1", ru))]))
+
+
+def test_prediction_page_says_how_to_create_the_quarter_tables_when_missing(empty_dirs):
+    _fill(*empty_dirs)
+
+    at = _page("failure_prediction").run()
+
+    assert not at.exception, [e.value for e in at.exception]
+    assert "Kiểm chứng theo quý" in _texts(at)
+    assert any("evaluate_oot.py" in str(i.value) for i in at.info)
+
+
+def test_prediction_page_compares_the_analysis_quarter_with_the_evaluated_quarters(empty_dirs):
+    dashboard, reports = empty_dirs
+    _fill(dashboard, reports)
+    _fill_daily(dashboard)
+    _fill_quarters(dashboard)
+
+    at = _page("failure_prediction").run()
+    text = _texts(at)
+
+    assert not at.exception, [e.value for e in at.exception]
+    assert "Validation (chọn mô hình)" in text and "Test quý I (đoạn normal)" in text and "2026-Q2 (đoạn normal)" in text
+    assert "đúng một lần" in text  # the note: each quarter is evaluated once with the frozen model
+    assert "8.23" in text and "2.12" in text  # the Q2 numbers, never the tail's trivial 100
+    assert "None" not in text and "—" in text  # the unpublished Q1 test AUC reads as a dash
+    assert any("Theo tháng" in str(e.label) for e in at.expander)
+
+
+def test_picker_names_a_new_quarter_from_the_catalog(empty_dirs):
+    dashboard, reports = empty_dirs
+    _fill(dashboard, reports)
+    _fill_daily(dashboard)
+    _fill_quarters(dashboard)
+    days = pd.read_parquet(str(dashboard / "scored_days.parquet"))
+    days.loc[days["score_date"].astype(str) == "2026-04-10", "split"] = "oot2"
+    days.to_parquet(str(dashboard / "scored_days.parquet"), index=False)
+    catalog = pd.read_parquet(str(dashboard / "quarter_catalog.parquet"))
+    new = pd.DataFrame([{"split": "oot2", "quarter_id": "2026-Q3", "label": "Q3/2026 ngoài thời gian", "kind": "out_of_time", "in_sample": False}])
+    pd.concat([catalog, new], ignore_index=True).to_parquet(str(dashboard / "quarter_catalog.parquet"), index=False)
+
+    at = _page("failure_prediction").run()
+    picker = at.selectbox(key="score_date")
+    assert "Q3/2026 ngoài thời gian" in picker.options[3]
+    picker.select("2026-04-10").run()
+
+    assert not at.exception, [e.value for e in at.exception]
+    assert any("Q3/2026 ngoài thời gian" in str(i.value) for i in at.info)

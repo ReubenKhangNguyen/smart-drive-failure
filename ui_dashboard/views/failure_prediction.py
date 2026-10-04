@@ -4,7 +4,7 @@ import streamlit as st
 
 from ui_dashboard import common, data
 from ui_dashboard.explain import (
-    DAILY_PICKER_NOTE, IN_SAMPLE_NOTE, NO_RULES_NOTE, OUT_SAMPLE_NOTE, RISK_SCORE_NOTE, SCORED_DAY_NOTE, TAIL_NOTE, conflict_note,
+    DAILY_PICKER_NOTE, IN_SAMPLE_NOTE, NO_RULES_NOTE, OUT_SAMPLE_NOTE, QUARTER_NOTE, RISK_SCORE_NOTE, SCORED_DAY_NOTE, TAIL_NOTE, conflict_note,
     missing_flag_note, tie_note)
 
 SMART_COLUMNS = ["smart_5_raw", "smart_187_raw", "smart_197_raw", "smart_198_raw"]
@@ -28,17 +28,20 @@ if daily:
     days_df = days_df.sort_values("score_date")
     options = [str(d) for d in days_df["score_date"]]
     split_of = dict(zip(options, days_df["split"]))
+    catalog, _ = common.load("quarter_catalog")
+    split_names = data.split_labels(catalog)
+    seen_splits = data.in_sample_splits(catalog)
     default = scored_date if scored_date in options else options[-1]
     scored_date = st.selectbox(
         "Ngày chấm điểm", options, index=options.index(default), key="score_date",
-        format_func=lambda d: "{} ({})".format(d, data.SPLIT_LABELS.get(split_of[d], split_of[d])))
+        format_func=lambda d: "{} ({})".format(d, split_names.get(split_of[d], split_of[d])))
     day = days_df[days_df["score_date"].astype(str) == scored_date].iloc[0]
 
 st.subheader("Top-{} ổ có điểm rủi ro cao nhất".format(k) + (", ngày {}".format(scored_date) if scored_date else ""))
 if daily:
     st.caption(DAILY_PICKER_NOTE)
-    label = data.SPLIT_LABELS.get(day["split"], day["split"])
-    if day["split"] in data.IN_SAMPLE_SPLITS:
+    label = split_names.get(day["split"], day["split"])
+    if day["split"] in seen_splits:
         st.warning(IN_SAMPLE_NOTE.format(label))
     else:
         st.info(OUT_SAMPLE_NOTE.format(label))
@@ -128,6 +131,35 @@ if metrics is not None and len(metrics):
     if len(views["test_auc"]):
         st.markdown("**PR-AUC / ROC-AUC trên toàn tập test (ổn định so với validation)**")
         st.dataframe(data.style_metrics(views["test_auc"]), use_container_width=True, hide_index=True)
+
+st.subheader("Kiểm chứng theo quý")
+quarter_metrics, _ = common.load("quarter_metrics")
+if quarter_metrics is None or not len(quarter_metrics):
+    st.info("Chưa có quý ngoài thời gian nào được đánh giá: chạy scripts/evaluate_oot.py rồi xuất lại bảng bằng analytics/export_dashboard.py.")
+else:
+    scored_days_for_ppd, _ = common.load("scored_days")
+    comparison = data.quarter_comparison(metrics, quarter_metrics, scored_days_for_ppd)
+    st.caption(QUARTER_NOTE)
+    shown = comparison.copy()  # formatted text, so a value that was never published reads "—" instead of "None"
+    for column, spec in (("Dòng dương mỗi ngày", "{:.1f}"), ("LR recall@K (%)", "{:.2f}"), ("LR precision@K (%)", "{:.2f}"),
+                         ("Luật recall@K (%)", "{:.2f}"), ("Luật precision@K (%)", "{:.2f}"), ("LR ROC-AUC", "{:.4f}"), ("LR PR-AUC", "{:.4f}")):
+        shown[column] = shown[column].map(lambda v, s=spec: "—" if pd.isna(v) else s.format(v))
+    st.dataframe(shown, use_container_width=True, hide_index=True)
+    frame = data.quarter_chart_frame(comparison)
+    if len(frame):
+        st.altair_chart(
+            alt.Chart(frame).mark_bar().encode(
+                x=alt.X("Phương pháp:N", title=None, axis=alt.Axis(labels=False, ticks=False)), y=alt.Y("Giá trị (%):Q"),
+                color=alt.Color("Phương pháp:N"),
+                column=alt.Column("Tập:N", title=None, sort=list(frame["Tập"].drop_duplicates()), header=alt.Header(labelOrient="bottom", labelFontSize=11)),
+                row=alt.Row("Chỉ số:N", title=None),
+                tooltip=["Tập", "Chỉ số", "Phương pháp", "Giá trị (%)"],
+            ).properties(width=90, height=110),
+        )
+    monthly_view = data.quarter_monthly_view(common.load("quarter_monthly")[0])
+    if len(monthly_view):
+        with st.expander("Theo tháng trong từng quý ngoài thời gian"):
+            st.dataframe(monthly_view, use_container_width=True, hide_index=True)
 
 st.subheader("Đặc trưng quan trọng")
 importance = common.require("model_feature_importance")

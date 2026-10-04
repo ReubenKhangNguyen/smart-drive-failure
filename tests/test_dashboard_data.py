@@ -225,3 +225,101 @@ def test_always_positive_note_names_only_the_columns_present_and_says_it_is_not_
     assert always_positive_note([]) is None
     assert "xác suất" not in both.lower()
 
+
+
+# ---------------------------------------------------------------- quarters (HD11)
+def _catalog():
+    return pd.DataFrame({
+        "split": ["train", "val", "test", "oot", "oot2"],
+        "label": ["tập huấn luyện", "tập validation", "tập test Q1", "Q2/2026 ngoài thời gian", "Q3/2026 ngoài thời gian"],
+        "in_sample": [True, True, False, False, False],
+    })
+
+
+def test_split_labels_come_from_the_catalog_and_fall_back_to_the_built_in_names():
+    assert data.split_labels(None)["oot"] == "Q2 ngoài thời gian"  # built-in
+    names = data.split_labels(_catalog())
+    assert names["oot2"] == "Q3/2026 ngoài thời gian" and names["oot"] == "Q2/2026 ngoài thời gian" and names["train"] == "tập huấn luyện"
+
+
+def test_in_sample_splits_follow_the_catalog():
+    assert data.in_sample_splits(None) == ("train", "val")
+    assert data.in_sample_splits(_catalog()) == ("train", "val")
+    only_train = _catalog().assign(in_sample=[True, False, False, False, False])
+    assert data.in_sample_splits(only_train) == ("train",)
+
+
+def _qm(split="oot", quarter="2026-Q2", lr=(0.0823, 0.0932), rules=(0.0212, 0.0268)):
+    rows = []
+    for segment in ("normal", "tail"):
+        rows.append({"quarter_id": quarter, "split": split, "segment": segment, "model": "logistic_regression", "pr_auc": 0.0277 if segment == "normal" else None,
+                     "roc_auc": 0.8485 if segment == "normal" else None, "recall_at_k": lr[0] if segment == "normal" else 1.0,
+                     "precision_at_k": lr[1] if segment == "normal" else 1.0})
+        rows.append({"quarter_id": quarter, "split": split, "segment": segment, "model": "baseline_rules_v1", "pr_auc": None, "roc_auc": None,
+                     "recall_at_k": rules[0] if segment == "normal" else 1.0, "precision_at_k": rules[1] if segment == "normal" else 1.0})
+    return pd.DataFrame(rows)
+
+
+def _scored_days():
+    return pd.DataFrame({"split": ["val", "val", "test", "oot", "oot", "oot"], "positives": [60, 40, 70, 100, 110, 120]})
+
+
+def _model_metrics():
+    rows = [
+        {"split": "val", "segment": "all", "model": "logistic_regression", "pr_auc": 0.0245, "roc_auc": 0.8545, "recall_at_k": 0.0921, "precision_at_k": 0.1027},
+        {"split": "val", "segment": "all", "model": "baseline_rules_v1", "pr_auc": None, "roc_auc": None, "recall_at_k": 0.0164, "precision_at_k": 0.0173},
+        {"split": "test", "segment": "normal", "model": "logistic_regression", "pr_auc": None, "roc_auc": None, "recall_at_k": 0.0555, "precision_at_k": 0.038},
+        {"split": "test", "segment": "normal", "model": "baseline_rules_v1", "pr_auc": None, "roc_auc": None, "recall_at_k": 0.0347, "precision_at_k": 0.024},
+    ]
+    return pd.DataFrame(rows)
+
+
+def test_positives_per_day_is_the_mean_per_split_and_none_when_unknown():
+    assert data.positives_per_day(_scored_days(), "oot") == 110.0 and data.positives_per_day(_scored_days(), "val") == 50.0
+    assert data.positives_per_day(_scored_days(), "oot9") is None and data.positives_per_day(None, "oot") is None
+
+
+def test_quarter_comparison_lists_validation_test_then_each_quarter_in_percent():
+    out = data.quarter_comparison(_model_metrics(), _qm(), _scored_days())
+
+    assert list(out["Tập"]) == ["Validation (chọn mô hình)", "Test quý I (đoạn normal)", "2026-Q2 (đoạn normal)"]
+    q2 = out.iloc[2]
+    assert round(q2["LR recall@K (%)"], 2) == 8.23 and round(q2["LR precision@K (%)"], 2) == 9.32
+    assert round(q2["Luật recall@K (%)"], 2) == 2.12 and round(q2["LR ROC-AUC"], 4) == 0.8485 and q2["Dòng dương mỗi ngày"] == 110.0
+    assert round(out.iloc[0]["LR ROC-AUC"], 4) == 0.8545 and pd.isna(out.iloc[1]["LR ROC-AUC"])  # the Q1 test only publishes AUC on the full test
+
+
+def test_quarter_comparison_orders_quarters_and_ignores_the_tail():
+    both = pd.concat([_qm("oot2", "2026-Q3", (0.07, 0.08), (0.02, 0.03)), _qm()], ignore_index=True)
+
+    out = data.quarter_comparison(None, both, None)
+
+    assert list(out["Tập"]) == ["2026-Q2 (đoạn normal)", "2026-Q3 (đoạn normal)"]
+    assert round(out.iloc[1]["LR recall@K (%)"], 2) == 7.0  # never the trivially perfect 100% of the tail
+    assert out["Dòng dương mỗi ngày"].isna().all()
+
+
+def test_quarter_comparison_with_nothing_is_empty():
+    assert len(data.quarter_comparison(None, None, None)) == 0
+
+
+def test_quarter_chart_frame_has_one_row_per_metric_method_and_set():
+    out = data.quarter_chart_frame(data.quarter_comparison(_model_metrics(), _qm(), _scored_days()))
+
+    assert set(out["Chỉ số"]) == {"Recall@K", "Precision@K"} and set(out["Phương pháp"]) == {"Logistic Regression", "Luật rules_v1"}
+    assert len(out) == 3 * 2 * 2
+    assert list(out["Tập"].drop_duplicates()) == ["Validation", "Test quý I", "2026-Q2"]  # short names, in time order
+
+
+def test_quarter_monthly_view_pairs_model_and_rules_per_month():
+    monthly = pd.DataFrame([
+        {"quarter_id": "2026-Q2", "month": m, "days": d, "positives": p, "model": model, "recall_at_k": r, "precision_at_k": q}
+        for m, d, p, lr, ru in (("2026-04", 30, 12, (0.0853, 0.1213), (0.0367, 0.0523)), ("2026-05", 31, 8, (0.0975, 0.101), (0.0132, 0.0152)))
+        for model, (r, q) in (("logistic_regression", lr), ("baseline_rules_v1", ru))
+    ])
+
+    out = data.quarter_monthly_view(monthly)
+
+    assert list(out["Tháng"]) == ["2026-04", "2026-05"] and list(out["Ngày"]) == [30, 31]
+    assert round(out.iloc[0]["LR recall@K (%)"], 2) == 8.53 and round(out.iloc[1]["Luật precision@K (%)"], 2) == 1.52
+    assert len(data.quarter_monthly_view(None)) == 0
