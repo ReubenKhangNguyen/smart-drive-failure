@@ -10,13 +10,14 @@ from pyspark.sql import functions as F
 LABEL_COL = "fail_within_7_days"
 
 
-def pr_auc(predictions: DataFrame, label_col: str = LABEL_COL) -> float:
-    evaluator = BinaryClassificationEvaluator(labelCol=label_col, rawPredictionCol="probability", metricName="areaUnderPR")
+def pr_auc(predictions: DataFrame, label_col: str = LABEL_COL, score_col: str = "probability") -> float:
+    """score_col may be the probability vector (default) or a numeric positive-class score such as risk_score."""
+    evaluator = BinaryClassificationEvaluator(labelCol=label_col, rawPredictionCol=score_col, metricName="areaUnderPR")
     return evaluator.evaluate(predictions)
 
 
-def roc_auc(predictions: DataFrame, label_col: str = LABEL_COL) -> float:
-    evaluator = BinaryClassificationEvaluator(labelCol=label_col, rawPredictionCol="probability", metricName="areaUnderROC")
+def roc_auc(predictions: DataFrame, label_col: str = LABEL_COL, score_col: str = "probability") -> float:
+    evaluator = BinaryClassificationEvaluator(labelCol=label_col, rawPredictionCol=score_col, metricName="areaUnderROC")
     return evaluator.evaluate(predictions)
 
 
