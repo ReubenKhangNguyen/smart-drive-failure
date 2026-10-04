@@ -68,6 +68,7 @@ services:
     volumes:
       - namenode_data:/hadoop/dfs/name
       - "C:/dataset_smart_drive_failure/data_Q1_2026:/external_data:ro"
+      - "C:/dataset_smart_drive_failure/data_Q2_2026:/external_data_q2:ro"
     networks:
       - smart-drive-net
     restart: unless-stopped

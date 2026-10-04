@@ -27,6 +27,10 @@ data:
   warmup_end_date: "2026-01-30"
   train_end_date: "2026-03-03"
   val_end_date: "2026-03-14"
+  # Out-of-time quarter (Q2-2026): only evaluates the frozen model, never trains or tunes.
+  oot_bronze: "/smart-drive/bronze/year=2026/quarter=Q2"
+  oot_start_date: "2026-04-01"
+  oot_end_date: "2026-06-30"
   required_columns:
     - date
     - serial_number

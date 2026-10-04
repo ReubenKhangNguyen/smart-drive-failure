@@ -159,3 +159,48 @@ def build_steps(spark, config: Dict[str, Any]) -> List[PipelineStep]:
         ("health_status", step_health_status),
         ("features", step_features),
     ]
+
+
+def build_oot_steps(spark, config: Dict[str, Any]) -> List[PipelineStep]:
+    """Out-of-time quarter (Q2) features: only the Q2 date partitions of Gold features are
+    written (dynamic overwrite), split = 'oot'. Q1 partitions are never touched and the
+    default batch steps / Airflow DAG are unchanged (docs/decisions.md, 2026-10-04)."""
+    from pyspark.sql import functions as F
+
+    from features.oot import build_oot_features
+
+    data_cfg = config["data"]
+    silver_path = hdfs_uri(config, "silver")
+    features_path = hdfs_uri(config, "features")
+
+    def step_features_oot():
+        enable_dynamic_overwrite(spark)
+        silver_df = spark.read.parquet(silver_path)
+        expected_columns = [c for c in spark.read.parquet(features_path).columns if c != "date"]
+
+        out_df = build_oot_features(silver_df, data_cfg, config["project"]["horizon_days"])
+        got_columns = [c for c in out_df.columns if c != "date"]
+        if sorted(got_columns) != sorted(expected_columns):
+            raise ValueError(
+                "oot features columns differ from Gold features (HD2): only in oot={}, only in Gold={}".format(
+                    sorted(set(got_columns) - set(expected_columns)), sorted(set(expected_columns) - set(got_columns))
+                )
+            )
+        out_df = out_df.select("date", *expected_columns).repartition("date")
+        out_df.write.mode("overwrite").partitionBy("date").parquet(features_path)
+
+        written = spark.read.parquet(features_path).where(F.col("split") == "oot")
+        stats = written.agg(
+            F.count("*").alias("rows"),
+            F.sum("fail_within_7_days").alias("positives"),
+            F.min("date").alias("min_date"),
+            F.max("date").alias("max_date"),
+        ).collect()[0]
+        return {
+            "rows_out": stats["rows"],
+            "positives": stats["positives"],
+            "min_date": str(stats["min_date"]),
+            "max_date": str(stats["max_date"]),
+        }
+
+    return [("features_oot", step_features_oot)]
