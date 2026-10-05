@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import time
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from pyspark.sql import DataFrame, SparkSession, Window
 from pyspark.sql import functions as F
@@ -147,11 +147,30 @@ def run(spark: SparkSession, bronze_path: str, silver_path: str) -> Dict[str, An
     return stats
 
 
+def resolve_paths(config: Dict[str, Any], quarter: Optional[str], bronze_path: Optional[str] = None, silver_path: Optional[str] = None) -> Tuple[str, str]:
+    """(bronze, silver) HDFS URIs: given explicitly, or taken from the config for a quarter id (data.quarters)."""
+    from config.settings import bronze_uri, hdfs_uri
+
+    if quarter:
+        bronze_path = bronze_path or bronze_uri(config, quarter)
+        silver_path = silver_path or hdfs_uri(config, "silver")
+    if not (bronze_path and silver_path):
+        raise ValueError("need --quarter, or both --bronze-path and --silver-path")
+    return bronze_path, silver_path
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Bronze CSV -> Silver Parquet (HD1)")
-    parser.add_argument("--bronze-path", required=True)
-    parser.add_argument("--silver-path", required=True)
+    parser.add_argument("--quarter", help="id quy trong data.quarters: lay thu muc Bronze va Silver tu config")
+    parser.add_argument("--bronze-path")
+    parser.add_argument("--silver-path")
     args = parser.parse_args()
+    try:
+        from config.settings import load_config
+
+        args.bronze_path, args.silver_path = resolve_paths(load_config(), args.quarter, args.bronze_path, args.silver_path)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     spark = SparkSession.builder.appName("smart-etl-bronze-to-silver").getOrCreate()
     stats = run(spark, args.bronze_path, args.silver_path)

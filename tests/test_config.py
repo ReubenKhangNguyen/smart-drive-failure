@@ -125,3 +125,27 @@ def test_bronze_target_needs_a_bronze_path_and_a_known_quarter():
         bronze_target(_CONFIG, "2026-Q3")
     with pytest.raises(ValueError, match="unknown quarter"):
         bronze_target(_CONFIG, "2030-Q1")
+
+
+def test_bronze_uri_prefixes_the_namenode_url():
+    from config.settings import bronze_uri
+
+    config = {"hdfs": {"namenode_url": "hdfs://nn:9000", "bronze": "/b/q1"}, "data": dict(BASE, quarters=[dict(Q2, bronze="/b/q2")])}
+
+    assert bronze_uri(config) == "hdfs://nn:9000/b/q1"
+    assert bronze_uri(config, "2026-Q2") == "hdfs://nn:9000/b/q2"
+
+
+def test_smart_etl_resolves_its_paths_from_a_quarter_or_from_explicit_arguments():
+    from processing.spark_jobs.smart_etl import resolve_paths
+
+    config = {"hdfs": {"namenode_url": "hdfs://nn:9000", "bronze": "/b/q1", "silver": "/silver/daily"},
+              "data": dict(BASE, quarters=[dict(Q2, bronze="/b/q2")])}
+
+    assert resolve_paths(config, "2026-Q2") == ("hdfs://nn:9000/b/q2", "hdfs://nn:9000/silver/daily")
+    assert resolve_paths(config, None, "hdfs://x/b", "hdfs://x/s") == ("hdfs://x/b", "hdfs://x/s")  # the old explicit way still works
+    assert resolve_paths(config, "2026-Q2", silver_path="hdfs://x/other")[1] == "hdfs://x/other"
+    with pytest.raises(ValueError, match="need --quarter"):
+        resolve_paths(config, None, "hdfs://x/b")
+    with pytest.raises(ValueError, match="unknown quarter"):
+        resolve_paths(config, "2030-Q1")
