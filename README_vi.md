@@ -12,7 +12,7 @@
 <p align="center">
   <img alt="Docker Compose" src="https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white">
   <img alt="Python 3.8 trên cụm" src="https://img.shields.io/badge/Python-3.8%20tr%C3%AAn%20c%E1%BB%A5m-3776AB?style=flat-square&logo=python&logoColor=white">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-241%20passed-2EA44F?style=flat-square&logo=pytest&logoColor=white">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-314%20passed-2EA44F?style=flat-square&logo=pytest&logoColor=white">
   <img alt="Dữ liệu" src="https://img.shields.io/badge/d%E1%BB%AF%20li%E1%BB%87u-Backblaze%20Drive%20Stats%202026--Q1-0B7285?style=flat-square">
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square">
 </p>
@@ -45,7 +45,7 @@
     <td align="center"><h3>351 nghìn</h3>ổ cứng<br><sub>1.030 lượt hỏng</sub></td>
     <td align="center"><h3>74×</h3>tỷ lệ hỏng của 🔴 Nguy hiểm<br><sub>so với 🟢 Khỏe (7 ngày)</sub></td>
     <td align="center"><h3>21,6×</h3>quét dữ liệu nhanh hơn<br><sub>Parquet so với CSV, cả quý</sub></td>
-    <td align="center"><h3>241</h3>test đạt<br><sub>chạy trong container</sub></td>
+    <td align="center"><h3>314</h3>test đạt<br><sub>chạy trong container</sub></td>
   </tr>
 </table>
 
@@ -174,7 +174,7 @@ K = 3 chọn theo silhouette (0,6870) **sau khi** tách nhóm `zero_signal` (c�
 > `risk_score` là **điểm xếp hạng** của mô hình có trọng số lớp, không phải xác suất đã hiệu chỉnh. Nhiều ổ bão hòa ở 1,0 nên khi hòa điểm sẽ xếp theo margin của mô hình, và recall@100 phụ thuộc cách chia hòa (9,21 % so với 9,06 % trên validation).
 
 > [!TIP]
-> **Ô chọn ngày và quý kế tiếp.** Trang dự đoán có ô chọn ngày: chọn bất kỳ ngày nào có đủ 7 ngày tương lai để xem Top-100 của ngày đó, mức tình trạng của `rules_v1`, thực tế từng ổ trong danh sách sau đó ra sao và lịch sử SMART. Mỗi ngày được gắn tên tập dữ liệu, và ngày thuộc tập huấn luyện hoặc validation có cảnh báo vì mô hình đã nhìn thấy chúng. Mô hình đóng băng cũng đã được kiểm tra đúng một lần trên quý kế tiếp (Q2-2026, ngoài thời gian): trên đoạn `normal` đạt recall@100 **8,23 %** và precision@100 **9,32 %**, so với 2,12 % và 2,68 % của luật; chi tiết và giới hạn ở [`oot_evaluation.md`](docs/results/oot_evaluation.md). Để làm mới ô chọn ngày, chạy `ml/score_daily.py` rồi `analytics/export_dashboard.py` (xem [Bắt đầu nhanh](#quick-start)).
+> **Ô chọn ngày và quý kế tiếp.** Trang dự đoán có ô chọn ngày: chọn bất kỳ ngày nào có đủ 7 ngày tương lai để xem Top-100 của ngày đó, mức tình trạng của `rules_v1`, thực tế từng ổ trong danh sách sau đó ra sao và lịch sử SMART. Mỗi ngày được gắn tên tập dữ liệu, và ngày thuộc tập huấn luyện hoặc validation có cảnh báo vì mô hình đã nhìn thấy chúng. Mô hình đóng băng cũng đã được kiểm tra đúng một lần trên quý kế tiếp (Q2-2026, ngoài thời gian): trên đoạn `normal` đạt recall@100 **8,23 %** và precision@100 **9,32 %**, so với 2,12 % và 2,68 % của luật; chi tiết và giới hạn ở [`oot_evaluation.md`](docs/results/oot_evaluation.md). Để làm mới ô chọn ngày, chạy `ml/score_daily.py` rồi `analytics/export_dashboard.py` (xem [Bắt đầu nhanh](#quick-start)). Mục **kiểm chứng theo quý** so sánh validation, test quý I và từng quý ngoài thời gian đã đánh giá, và tên tập của mỗi ngày lấy từ một danh mục đã xuất, nên **thêm một quý mới** không cần sửa dashboard: dùng các lệnh hoặc DAG Airflow `smart_drive_new_quarter` ở mục 11 của [`docs/quick-start.md`](docs/quick-start.md).
 
 <p align="center"><img src="docs/images/failure_prediction.png" alt="Trang dự đoán hỏng" width="92%"></p>
 
@@ -219,7 +219,7 @@ Năm trang, chỉ đọc các bảng nhỏ đã xuất sẵn. Trang nào thiếu
 
 **Yêu cầu:** Windows 11 với WSL2 + Docker Desktop (Compose v2); ổ đĩa trống cho CSV gốc (11,2 GB mỗi quý) cộng bản sao HDFS; Python 3 trên máy chỉ để chạy vài script nhỏ (`pip install pyyaml requests`). Job Spark và test chạy trong container.
 
-**Dữ liệu:** [Backblaze Drive Stats](https://www.backblaze.com/cloud-storage/resources/hard-drive-test-data), quý 2026-Q1 (`data_Q1_2026.zip`). Ghi nguồn Backblaze, không phân phối lại hay bán bộ dữ liệu, và đọc điều khoản trên trang tải (điều khoản đó được ưu tiên hơn phần tóm tắt này). Dữ liệu **không** nằm trong repo.
+**Dữ liệu:** [Backblaze Drive Stats](https://www.backblaze.com/cloud-storage/resources/hard-drive-test-data), hai quý 2026-Q1 (`data_Q1_2026.zip`, huấn luyện và chọn mô hình) và 2026-Q2 (`data_Q2_2026.zip`, kiểm chứng ngoài thời gian một lần); quý khác được thêm theo mục 11 của [`docs/quick-start.md`](docs/quick-start.md). Ghi nguồn Backblaze, không phân phối lại hay bán bộ dữ liệu, và đọc điều khoản trên trang tải (điều khoản đó được ưu tiên hơn phần tóm tắt này). Dữ liệu **không** nằm trong repo.
 
 **1 · Khởi động cụm**
 
@@ -330,11 +330,11 @@ docker compose run --rm tests python3 -m pytest -q
 config/                 cấu hình trung tâm (project.yaml), cấu hình HDFS
 ingestion/              tải, kiểm tra, nạp Bronze, Kafka producer
 processing/spark_jobs/  Bronze -> Silver (làm sạch), profiling schema
-features/               nhãn 7 ngày và đặc trưng cửa sổ
-ml/                     huấn luyện, đánh giá, chấm điểm
+features/               nhãn 7 ngày và đặc trưng cửa sổ, cho mọi quý
+ml/                     huấn luyện, đánh giá, chấm điểm, đánh giá ngoài thời gian, chấm điểm nhiều ngày
 analytics/              phân tích SMART, tình trạng ổ, K-Means, xuất bảng dashboard, benchmark
 pipeline/               pipeline batch, huấn luyện, chấm điểm, streaming consumer, đặc tả DAG
-dags/                   Airflow DAG
+dags/                   các DAG Airflow (toàn bộ pipeline, một quý mới)
 scripts/                điểm vào (batch, huấn luyện, chấm điểm, demo streaming, benchmark, kiểm tra)
 ui_dashboard/           ứng dụng Streamlit (app.py, views/)
 tests/                  unit test trên fixture nhỏ (không cần cụm)
@@ -373,7 +373,8 @@ artifacts/              báo cáo và bảng dashboard sinh ra (git không theo 
 
 ## ⚠ Giới hạn
 
-- **Chỉ một quý** dữ liệu (2026-Q1, 90 ngày). Ngưỡng của luật và mô hình đều học từ chính quý này nên có thể không tổng quát.
+- **Chỉ hai quý** dữ liệu: 2026-Q1 (90 ngày, huấn luyện và chọn mô hình) và 2026-Q2 (91 ngày, kiểm chứng ngoài thời gian một lần). Ngưỡng của luật và mô hình học từ quý I; thêm một quý là quá ít để nói chất lượng có trôi hay không (recall@100 giảm trong tháng 6, chưa giải thích được).
+- **Bảng tình trạng của luật `rules_v1` chỉ có cho quý I:** ngày của các quý sau không có mức tình trạng và không có số ổ CRITICAL trên dashboard, thay vì hiện một số 0 bịa ra.
 - **Nhãn dương cực hiếm** (≈ 0,02 % số dòng): PR-AUC thấp và recall@100 ở mức khiêm tốn (5,55 % trên đoạn `normal` của test).
 - **Khoảng một phần tư ổ hỏng không có tín hiệu** ở bốn chỉ số: 27,5 % (239 trên 870) ở ngày liền trước khi hỏng, 26,4 % (244 trên 923) trong 7 ngày, 24,0 % (241 trên 1.003) trong 30 ngày; mẫu số khác nhau theo từng cửa sổ ([`docs/evaluation.md`](docs/evaluation.md), mục 5.1).
 - **Random Forest không tái lập:** huấn luyện lại trên cùng cách chia cho kết quả khác, nên Logistic Regression là mô hình chính thức.
@@ -381,7 +382,7 @@ artifacts/              báo cáo và bảng dashboard sinh ra (git không theo 
 - Hãng sản xuất được suy từ tiền tố tên model bằng quy tắc trong code, không phải trường gốc của Backblaze.
 - Benchmark và cấu hình Airflow (SQLite, sequential executor) chỉ là minh họa trên một máy. Demo Kafka phát lại một ngày dữ liệu có sẵn, không phải nguồn dữ liệu trực tiếp.
 
-**Hướng phát triển:** thêm nhiều quý với đánh giá cuốn chiếu · phân tích từng ca bỏ sót · hiệu chỉnh xác suất, tinh chỉnh Random Forest · DAG có lịch với executor cho môi trường thật và chấm điểm nhận dữ liệu từ nhánh streaming.
+**Hướng phát triển:** thêm nhiều quý (pipeline và một DAG đã nhận được) cùng theo dõi trôi dữ liệu và chính sách huấn luyện lại · phân tích từng ca bỏ sót · hiệu chỉnh xác suất, tinh chỉnh Random Forest · DAG có lịch với executor cho môi trường thật và chấm điểm nhận dữ liệu từ nhánh streaming.
 
 <a id="author"></a>
 
