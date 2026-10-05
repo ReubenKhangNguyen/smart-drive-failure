@@ -75,6 +75,7 @@ def null_rate_report(df: DataFrame, columns: List[str]) -> Dict[str, float]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Liet ke cot va phat hien schema drift tren thu muc Bronze CSV")
+    parser.add_argument("--quarter", help="id quy trong data.quarters: lay thu muc Bronze cua quy do (thay cho --dir)")
     parser.add_argument(
         "--dir",
         default=hdfs_uri(load_config(), "bronze"),
@@ -84,7 +85,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
-    args = build_parser().parse_args()
+    parser = build_parser()
+    args = parser.parse_args()
+    if args.quarter:
+        from config.settings import bronze_uri
+
+        args.dir = bronze_uri(load_config(), args.quarter)
 
     spark = SparkSession.builder.appName("smart-schema-profile").getOrCreate()
     profile = profile_schema(spark, args.dir)

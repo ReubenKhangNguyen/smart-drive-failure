@@ -115,3 +115,8 @@ def bronze_target(config: Dict[str, Any], quarter_id: Optional[str] = None) -> D
     if not quarter.get("bronze"):
         raise ValueError("quarter {} has no 'bronze' path in data.quarters".format(quarter["id"]))
     return {"id": quarter["id"], "start_date": quarter["start_date"], "end_date": quarter["end_date"], "path": quarter["bronze"]}
+
+
+def bronze_uri(config: Dict[str, Any], quarter_id: Optional[str] = None) -> str:
+    """Full HDFS URI of a quarter's Bronze directory (namenode_url + its path); the analysis quarter by default."""
+    return config["hdfs"]["namenode_url"] + bronze_target(config, quarter_id)["path"]

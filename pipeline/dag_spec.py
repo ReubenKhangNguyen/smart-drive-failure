@@ -41,11 +41,30 @@ TASKS: List[TaskSpec] = [
 ]
 
 
+# Second DAG: one NEW out-of-time quarter (data.quarters). The quarter id is a DAG parameter: trigger with
+#   airflow dags trigger smart_drive_new_quarter --conf '{"quarter": "2026-Q3"}'
+# Loading Bronze stays the manual `scripts/upload_to_hdfs.py --quarter ...` step on the host (the DAG only checks it).
+# Each quarter is evaluated once: evaluate_quarter stops the run if that quarter already has its report.
+QUARTER_DAG_ID = "smart_drive_new_quarter"
+QUARTER_PARAM = "{{ params.quarter }}"
+_Q = "--quarter " + QUARTER_PARAM
+QUARTER_TASKS: List[TaskSpec] = [
+    TaskSpec("verify_bronze_quarter", "scripts/verify_bronze.py", _Q, False, 5),
+    TaskSpec("profile_schema", "processing/spark_jobs/schema_profile.py", _Q, True, 10),
+    TaskSpec("clean_silver_quarter", "processing/spark_jobs/smart_etl.py", _Q, True, 30),
+    TaskSpec("build_quarter_features", "scripts/run_oot_features.py", _Q, True, 45),
+    TaskSpec("evaluate_quarter", "scripts/evaluate_oot.py", _Q, True, 30),
+    TaskSpec("score_all_days", "ml/score_daily.py", "", True, 30),
+    TaskSpec("export_dashboard", "analytics/export_dashboard.py", "", True, 15),
+]
+
+
 def bash_command(task: TaskSpec) -> str:
     """The bash command of one task. Spark tasks first check that no other Spark application is running."""
     script = "{}/{}".format(REPO, task.script)
     if not task.uses_spark:
-        return "PYTHONPATH={repo} {python} {script}".format(repo=REPO, python=PYTHON, script=script)
+        command = "PYTHONPATH={repo} {python} {script}".format(repo=REPO, python=PYTHON, script=script)
+        return command + (" " + task.args if task.args else "")
     env = "PYTHONPATH={repo} PYSPARK_PYTHON={python} PYSPARK_DRIVER_PYTHON={python}".format(repo=REPO, python=PYTHON)
     guard = "PYTHONPATH={repo} {python} {repo}/scripts/check_spark_idle.py".format(repo=REPO, python=PYTHON)
     submit = (
