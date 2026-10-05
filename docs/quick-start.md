@@ -213,6 +213,13 @@ DAG `smart_drive_pipeline` điều phối cả dự án bằng cách gọi lại
 
 **Nạp Bronze là bước thủ công** `python scripts/upload_to_hdfs.py ...` chạy trên máy host (script cần docker CLI và đường dẫn dữ liệu trên host, mục 2 ở trên); DAG chỉ xác nhận kết quả. Nếu thiếu file, `verify_bronze` dừng DAG và in hướng dẫn.
 
+**DAG thứ hai `smart_drive_new_quarter`** xử lý MỘT quý mới ngoài thời gian (đã khai báo trong `data.quarters`, xem hướng dẫn thêm quý mới): quý là tham số bắt buộc của lần chạy, không có giá trị mặc định. Bảy task tuần tự, mỗi task gọi lại script có sẵn: `verify_bronze_quarter` (chỉ đọc) → `profile_schema` → `clean_silver_quarter` → `build_quarter_features` → `evaluate_quarter` (mô hình đóng băng, **mỗi quý chỉ một lần**: quý đã có báo cáo thì task dừng) → `score_all_days` → `export_dashboard`. Nạp Bronze vẫn là bước thủ công `upload_to_hdfs.py --quarter ...` trên máy host. DAG không huấn luyện lại mô hình.
+
+```bash
+docker compose exec airflow-scheduler airflow dags trigger smart_drive_new_quarter --conf '{"quarter": "2026-Q3"}'
+docker compose exec airflow-scheduler airflow dags list-runs -d smart_drive_new_quarter
+```
+
 Cách làm: Airflow 2.10.5 (bản mới nhất còn hỗ trợ Python 3.8) chạy trong image dựng từ image Spark của dự án (cùng Python 3.8, Java 11, Spark 3.5.1 với cụm), trong venv riêng; mỗi task Spark chạy `spark-submit` ở client mode từ container Airflow tới `spark://spark-master:7077` với executor mặc định (như các lệnh chạy tay). SQLite + SequentialExecutor, chỉ dành cho demo. Không mount docker socket.
 
 Trước khi chạy (RAM Docker 7.36 GiB là giới hạn): đóng ứng dụng nặng trên máy host, cắm sạc, tắt chế độ ngủ, dừng dashboard (`docker compose stop ui-dashboard`, không xóa gì) và không chạy job Spark khác. Mỗi task Spark tự kiểm tra master không có ứng dụng nào khác (`scripts/check_spark_idle.py`) và dùng pool `spark_cluster` 1 slot.
