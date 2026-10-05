@@ -25,12 +25,13 @@ def _fetch(url: str, dest: Path) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Tai file zip Backblaze cho quy da cau hinh trong config/project.yaml")
+    parser.add_argument("--quarter", default=None, help="quy can tai, vd 2026-Q3 (mac dinh: project.quarter trong config)")
     parser.add_argument("--dest-dir", default="dataset/raw")
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     args = parser.parse_args()
 
     config = load_config()
-    quarter = config["project"]["quarter"]
+    quarter = args.quarter or config["project"]["quarter"]
     zip_name = quarter_zip_filename(quarter)
     dest_dir = Path(args.dest_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)

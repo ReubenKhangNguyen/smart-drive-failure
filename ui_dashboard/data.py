@@ -167,6 +167,89 @@ def day_hindsight(day: pd.Series, k: int) -> str:
     return text + "."
 
 
+def split_labels(catalog: Optional[pd.DataFrame]) -> Dict[str, str]:
+    """Display name of every split value: from the exported quarter_catalog when there is one (so a new quarter is named
+    without touching the dashboard), the built-in names otherwise."""
+    labels = dict(SPLIT_LABELS)
+    if catalog is not None and len(catalog):
+        labels.update(dict(zip(catalog["split"], catalog["label"])))
+    return labels
+
+
+def in_sample_splits(catalog: Optional[pd.DataFrame]) -> Tuple[str, ...]:
+    """Splits the model has already seen (training and validation): a day of those shows a warning."""
+    if catalog is not None and len(catalog) and "in_sample" in catalog.columns:
+        return tuple(catalog.loc[catalog["in_sample"].astype(bool), "split"])
+    return IN_SAMPLE_SPLITS
+
+
+def positives_per_day(scored_days: Optional[pd.DataFrame], split: str) -> Optional[float]:
+    """Average number of drives that fail within 7 days, per scored day of a split (recall@K is capped when this exceeds K)."""
+    if scored_days is None or not len(scored_days):
+        return None
+    part = scored_days[scored_days["split"] == split]
+    return float(part["positives"].mean()) if len(part) else None
+
+
+def _first(frame: pd.DataFrame, column: str, scale: float = 1.0) -> Optional[float]:
+    if not len(frame) or pd.isna(frame[column].iloc[0]):
+        return None
+    return float(frame[column].iloc[0]) * scale
+
+
+def quarter_comparison(
+    metrics: Optional[pd.DataFrame], quarter_metrics: Optional[pd.DataFrame], scored_days: Optional[pd.DataFrame]
+) -> pd.DataFrame:
+    """One row per evaluation set, newest last: validation and test of the analysis quarter (from model_metrics), then
+    the 'normal' segment of every evaluated out-of-time quarter (from quarter_metrics). Percent values."""
+    def row(label, split, part):
+        lr, rules = part[part["model"] == "logistic_regression"], part[part["model"] == "baseline_rules_v1"]
+        return {
+            "Tập": label, "Dòng dương mỗi ngày": positives_per_day(scored_days, split),
+            "LR recall@K (%)": _first(lr, "recall_at_k", 100), "LR precision@K (%)": _first(lr, "precision_at_k", 100),
+            "Luật recall@K (%)": _first(rules, "recall_at_k", 100), "Luật precision@K (%)": _first(rules, "precision_at_k", 100),
+            "LR ROC-AUC": _first(lr, "roc_auc"), "LR PR-AUC": _first(lr, "pr_auc"),
+        }
+
+    rows = []
+    if metrics is not None and len(metrics):
+        for label, split, segment in (("Validation (chọn mô hình)", "val", "all"), ("Test quý I (đoạn normal)", "test", "normal")):
+            rows.append(row(label, split, metrics[(metrics["split"] == split) & (metrics["segment"] == segment)]))
+    if quarter_metrics is not None and len(quarter_metrics):
+        for quarter_id in sorted(quarter_metrics["quarter_id"].unique()):
+            part = quarter_metrics[(quarter_metrics["quarter_id"] == quarter_id) & (quarter_metrics["segment"] == "normal")]
+            if len(part):
+                rows.append(row("{} (đoạn normal)".format(quarter_id), str(part["split"].iloc[0]), part))
+    return pd.DataFrame(rows)
+
+
+def quarter_chart_frame(comparison: pd.DataFrame) -> pd.DataFrame:
+    """Long format of the comparison for a grouped bar chart: metric x method x evaluation set. The set names are
+    shortened (the table keeps the long ones) so the chart labels fit; rows stay in time order."""
+    rows = []
+    for _, r in comparison.iterrows():
+        short = str(r["Tập"]).split(" (")[0]
+        for metric, column_lr, column_rules in (("Recall@K", "LR recall@K (%)", "Luật recall@K (%)"), ("Precision@K", "LR precision@K (%)", "Luật precision@K (%)")):
+            for method, column in (("Logistic Regression", column_lr), ("Luật rules_v1", column_rules)):
+                if pd.notna(r[column]):
+                    rows.append({"Tập": short, "Chỉ số": metric, "Phương pháp": method, "Giá trị (%)": float(r[column])})
+    return pd.DataFrame(rows)
+
+
+def quarter_monthly_view(monthly: Optional[pd.DataFrame]) -> pd.DataFrame:
+    """Wide monthly table per quarter: month, days, positives, then recall/precision of the model and of the rules."""
+    if monthly is None or not len(monthly):
+        return pd.DataFrame()
+    lr = monthly[monthly["model"] == "logistic_regression"].set_index(["quarter_id", "month"])
+    rules = monthly[monthly["model"] == "baseline_rules_v1"].set_index(["quarter_id", "month"]).reindex(lr.index)
+    out = pd.DataFrame({
+        "Quý": [i[0] for i in lr.index], "Tháng": [i[1] for i in lr.index], "Ngày": lr["days"].values, "Dòng dương": lr["positives"].values,
+        "LR recall@K (%)": lr["recall_at_k"].values * 100, "LR precision@K (%)": lr["precision_at_k"].values * 100,
+        "Luật recall@K (%)": rules["recall_at_k"].values * 100, "Luật precision@K (%)": rules["precision_at_k"].values * 100,
+    })
+    return out.sort_values(["Quý", "Tháng"]).reset_index(drop=True)
+
+
 def metrics_views(metrics: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     """Split model_metrics into display tables. recall@K / precision@K of the FULL test are never
     returned (right-censoring tail dominates them); the headline test number is the 'normal' segment."""

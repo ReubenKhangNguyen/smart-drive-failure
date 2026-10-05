@@ -18,6 +18,11 @@ IN_SAMPLE_NOTE = (
     "Ngày này thuộc {} của Q1: mô hình đã nhìn thấy dữ liệu này khi huấn luyện hoặc được chọn, nên Top-K ở đây nhìn lại dữ liệu đã biết "
     "và thường đẹp hơn thực tế. Không dùng để đánh giá chất lượng; hãy chọn ngày thuộc tập test Q1 hoặc Q2."
 )
+QUARTER_NOTE = (
+    "Mỗi quý ngoài thời gian được đánh giá đúng một lần bằng mô hình đã chốt từ quý I (không huấn luyện lại, không chỉnh tham số). "
+    "Recall@K không so trực tiếp được giữa các tập vì số ổ hỏng mỗi ngày khác nhau: khi số ổ hỏng trong ngày vượt K, recall tối đa bị chặn "
+    "dưới 100% còn precision thì không, nên precision@K so sánh công bằng hơn. Đoạn tail (bảy ngày cuối quý, chỉ còn ổ đã hỏng) bị loại khỏi số liệu chính."
+)
 NO_RULES_NOTE = (
     "Luật rules_v1 chưa được tính cho ngày này (bảng tình trạng ổ mới có cho Q1), nên cột “Mức tình trạng” để trống và "
     "không có thống kê số ổ CRITICAL của ngày. Điểm rủi ro và cột “Thực tế” vẫn đúng."
