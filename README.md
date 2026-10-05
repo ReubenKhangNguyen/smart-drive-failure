@@ -12,7 +12,7 @@
 <p align="center">
   <img alt="Docker Compose" src="https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white">
   <img alt="Python 3.8 on the cluster" src="https://img.shields.io/badge/Python-3.8%20on%20the%20cluster-3776AB?style=flat-square&logo=python&logoColor=white">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-241%20passed-2EA44F?style=flat-square&logo=pytest&logoColor=white">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-314%20passed-2EA44F?style=flat-square&logo=pytest&logoColor=white">
   <img alt="Data" src="https://img.shields.io/badge/data-Backblaze%20Drive%20Stats%202026--Q1-0B7285?style=flat-square">
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square">
 </p>
@@ -45,7 +45,7 @@
     <td align="center"><h3>351 k</h3>drives<br><sub>1,030 failures</sub></td>
     <td align="center"><h3>74×</h3>failure rate of 🔴 Critical<br><sub>vs. 🟢 Healthy (7 days)</sub></td>
     <td align="center"><h3>21.6×</h3>faster scans<br><sub>Parquet vs. CSV, full quarter</sub></td>
-    <td align="center"><h3>241</h3>tests passing<br><sub>run in a container</sub></td>
+    <td align="center"><h3>314</h3>tests passing<br><sub>run in a container</sub></td>
   </tr>
 </table>
 
@@ -174,7 +174,7 @@ K = 3 chosen by silhouette (0.6870) **after** separating the `zero_signal` group
 > `risk_score` is a **ranking score** from a class-weighted model, not a calibrated probability. Many drives saturate at 1.0, so ties are broken by the model margin, and recall@100 depends on the tie-break rule (9.21 % vs. 9.06 % on validation).
 
 > [!TIP]
-> **Date picker and the next quarter.** The prediction page has a date picker: choose any day whose full 7-day horizon is observed to see that day's Top-100, the `rules_v1` level, what actually happened to each listed drive afterwards, and its SMART history. Every day is labelled with its split, and days from the training or validation set carry a warning because the model has already seen them. The frozen model was also checked once on the next quarter (Q2-2026, out-of-time): on its `normal` segment it reaches recall@100 **8.23 %** and precision@100 **9.32 %** against 2.12 % and 2.68 % for the rules; details and caveats in [`oot_evaluation.md`](docs/results/oot_evaluation.md). To refresh the picker run `ml/score_daily.py`, then `analytics/export_dashboard.py` (see [Quick start](#quick-start)).
+> **Date picker and the next quarter.** The prediction page has a date picker: choose any day whose full 7-day horizon is observed to see that day's Top-100, the `rules_v1` level, what actually happened to each listed drive afterwards, and its SMART history. Every day is labelled with its split, and days from the training or validation set carry a warning because the model has already seen them. The frozen model was also checked once on the next quarter (Q2-2026, out-of-time): on its `normal` segment it reaches recall@100 **8.23 %** and precision@100 **9.32 %** against 2.12 % and 2.68 % for the rules; details and caveats in [`oot_evaluation.md`](docs/results/oot_evaluation.md). To refresh the picker run `ml/score_daily.py`, then `analytics/export_dashboard.py` (see [Quick start](#quick-start)). A **per-quarter validation** section compares validation, the Q1 test and every evaluated out-of-time quarter, and each day's split is named from an exported catalog, so a **new quarter** needs no dashboard change: add it with the commands or the Airflow DAG `smart_drive_new_quarter` described in [`docs/quick-start.md`](docs/quick-start.md), section 11.
 
 <p align="center"><img src="docs/images/failure_prediction.png" alt="Failure prediction page" width="92%"></p>
 
@@ -219,7 +219,7 @@ Five pages, read-only on small exported tables. A page whose table is missing sh
 
 **Requirements:** Windows 11 with WSL2 + Docker Desktop (Compose v2); free disk for the raw CSV (11.2 GB per quarter) plus HDFS replicas; Python 3 on the host only for small scripts (`pip install pyyaml requests`). Spark jobs and tests run in containers.
 
-**Data:** [Backblaze Drive Stats](https://www.backblaze.com/cloud-storage/resources/hard-drive-test-data), quarter 2026-Q1 (`data_Q1_2026.zip`). Cite Backblaze as the source, do not redistribute or sell the dataset, and read the terms on the download page (they take precedence over this summary). The data is **not** part of this repository.
+**Data:** [Backblaze Drive Stats](https://www.backblaze.com/cloud-storage/resources/hard-drive-test-data), quarters 2026-Q1 (`data_Q1_2026.zip`, training and model selection) and 2026-Q2 (`data_Q2_2026.zip`, one out-of-time check); further quarters are added as described in [`docs/quick-start.md`](docs/quick-start.md), section 11. Cite Backblaze as the source, do not redistribute or sell the dataset, and read the terms on the download page (they take precedence over this summary). The data is **not** part of this repository.
 
 **1 · Start the cluster**
 
@@ -330,11 +330,11 @@ docker compose run --rm tests python3 -m pytest -q
 config/                 central settings (project.yaml), HDFS configuration
 ingestion/              download, validation, Bronze loading, Kafka producer
 processing/spark_jobs/  Bronze -> Silver (cleaning), schema profiling
-features/               7-day label and rolling features
-ml/                     train, evaluate, score
+features/               7-day label and rolling features, for any quarter
+ml/                     train, evaluate, score, out-of-time evaluation, daily scoring
 analytics/              SMART analysis, health status, K-Means, dashboard export, benchmark
 pipeline/               batch, training and scoring pipelines, streaming consumer, DAG spec
-dags/                   Airflow DAG
+dags/                   Airflow DAGs (full pipeline, one new quarter)
 scripts/                entry points (batch, training, scoring, streaming demo, benchmark, checks)
 ui_dashboard/           Streamlit app (app.py, views/)
 tests/                  unit tests on small fixtures (no cluster needed)
@@ -373,7 +373,8 @@ artifacts/              generated reports and dashboard tables (not tracked by g
 
 ## ⚠ Limitations
 
-- **One quarter** of data (2026-Q1, 90 days). Rule thresholds and the model come from the same quarter and may not generalise.
+- **Two quarters** of data: 2026-Q1 (90 days, training and model selection) and 2026-Q2 (91 days, checked once out-of-time). Rule thresholds and the model come from Q1; one extra quarter is too little to say whether quality drifts (recall@100 fell in June, unexplained).
+- **The `rules_v1` health table covers Q1 only:** days of later quarters show no health level and no CRITICAL count on the dashboard, rather than an invented 0.
 - **Rare positives** (≈ 0.02 % of rows): PR-AUC is low and recall@100 is modest in absolute terms (5.55 % on the test `normal` segment).
 - **About a quarter of failed drives show no signal** on the four indicators: 27.5 % (239 of 870) on the day before failure, 26.4 % (244 of 923) over 7 days, 24.0 % (241 of 1,003) over 30 days; the denominators differ per window ([`docs/evaluation.md`](docs/evaluation.md), section 5.1).
 - **Random Forest is not reproducible:** re-training on the same split gave different metrics, so Logistic Regression is the official model.
@@ -381,7 +382,7 @@ artifacts/              generated reports and dashboard tables (not tracked by g
 - Manufacturer is derived from the model-name prefix by a code rule, not from a Backblaze field.
 - The benchmark and the Airflow setup (SQLite, sequential executor) are single-machine demonstrations. The Kafka demo replays one day of existing data and is not a live feed.
 
-**Future work:** more quarters with rolling evaluation · analysis of individual missed failures · probability calibration, Random Forest tuning · a scheduled DAG with a production executor and scoring fed from the streaming path.
+**Future work:** more quarters (the pipeline and a DAG already accept them) with drift tracking and a retraining policy · analysis of individual missed failures · probability calibration, Random Forest tuning · a scheduled DAG with a production executor and scoring fed from the streaming path.
 
 <a id="author"></a>
 
