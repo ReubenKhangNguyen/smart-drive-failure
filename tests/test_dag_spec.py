@@ -106,3 +106,64 @@ def test_commands_are_not_mistaken_for_template_files_and_contain_no_secrets():
         command = bash_command(task)
         assert not command.rstrip().endswith(".sh")  # BashOperator would treat that as a template file path
         assert "password" not in command.lower() and "AIRFLOW_ADMIN" not in command
+
+
+# ---------------------------------------------------------------- second DAG: one new quarter
+from pipeline.dag_spec import QUARTER_DAG_ID, QUARTER_PARAM, QUARTER_TASKS  # noqa: E402
+
+QUARTER_ORDER = [
+    "verify_bronze_quarter", "profile_schema", "clean_silver_quarter", "build_quarter_features",
+    "evaluate_quarter", "score_all_days", "export_dashboard",
+]
+
+
+def _qtask(task_id):
+    return next(t for t in QUARTER_TASKS if t.task_id == task_id)
+
+
+def test_the_new_quarter_dag_has_its_tasks_in_order_and_a_distinct_id():
+    assert QUARTER_DAG_ID == "smart_drive_new_quarter" and QUARTER_DAG_ID != DAG_ID
+    assert [t.task_id for t in QUARTER_TASKS] == QUARTER_ORDER
+    assert len({t.task_id for t in QUARTER_TASKS}) == len(QUARTER_TASKS)
+
+
+def test_every_quarter_task_calls_an_existing_script_that_understands_the_quarter_flag():
+    for task in QUARTER_TASKS:
+        assert (ROOT / task.script).is_file(), task.script
+        assert "{}/{}".format(REPO, task.script) in bash_command(task)
+        if "--quarter" in task.args:
+            assert "--quarter" in (ROOT / task.script).read_text(encoding="utf-8"), task.script  # the script really takes it
+    assert all("train" not in t.script for t in QUARTER_TASKS)  # the frozen model is never retrained here
+
+
+def test_the_quarter_id_is_a_template_parameter_in_exactly_the_tasks_that_need_it():
+    needs = {"verify_bronze_quarter", "profile_schema", "clean_silver_quarter", "build_quarter_features", "evaluate_quarter"}
+    for task in QUARTER_TASKS:
+        assert (QUARTER_PARAM in bash_command(task)) == (task.task_id in needs), task.task_id
+    assert QUARTER_PARAM == "{{ params.quarter }}"
+
+
+def test_non_spark_tasks_receive_their_arguments_too():
+    command = bash_command(_qtask("verify_bronze_quarter"))
+
+    assert command.endswith("scripts/verify_bronze.py --quarter {{ params.quarter }}")
+    assert "spark-submit" not in command
+    assert bash_command(next(t for t in TASKS if t.task_id == "verify_bronze")).endswith("scripts/verify_bronze.py")  # the old DAG is unchanged
+
+
+def test_quarter_spark_tasks_check_the_cluster_first_and_share_the_single_slot():
+    for task in QUARTER_TASKS:
+        if task.uses_spark:
+            command = bash_command(task)
+            assert "check_spark_idle.py" in command and command.index("check_spark_idle.py") < command.index("spark-submit")
+            assert SPARK_MASTER in command
+    assert _qtask("verify_bronze_quarter").uses_spark is False
+    assert all(0 < t.timeout_minutes <= 60 for t in QUARTER_TASKS)
+    assert _qtask("build_quarter_features").timeout_minutes >= 30  # the logged run took 477 s
+
+
+def test_quarter_commands_contain_no_secrets_and_no_shell_template_file():
+    for task in QUARTER_TASKS:
+        command = bash_command(task)
+        assert not command.rstrip().endswith(".sh")
+        assert "password" not in command.lower() and "AIRFLOW_ADMIN" not in command

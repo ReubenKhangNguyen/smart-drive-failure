@@ -94,3 +94,11 @@ def test_the_webhdfs_url_used_by_verify_bronze_is_in_the_config():
     from config.settings import load_config
 
     assert load_config()["hdfs"]["namenode_web_url"] == "http://namenode:9870"
+
+
+def test_the_new_quarter_dag_file_is_a_thin_wrapper_over_the_spec():
+    source = (ROOT / "dags" / "smart_drive_new_quarter_dag.py").read_text(encoding="utf-8")
+
+    assert "schedule=None" in source and "max_active_runs=1" in source and '"retries": 0' in source
+    assert "from pipeline.dag_spec import" in source and "QUARTER_TASKS" in source
+    assert "spark-submit" not in source and "pyspark" not in source
