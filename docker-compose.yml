@@ -6,20 +6,91 @@ x-hadoop-common: &hadoop-common
     - smart-drive-net
 
 x-spark-common: &spark-common
-  image: bitnami/spark:3.5.1
+  image: smart-drive-spark:3.5.1
+  build:
+    context: .
+    dockerfile: spark/Dockerfile
   depends_on:
     namenode:
       condition: service_started
   environment:
     SPARK_MASTER_URL: spark://spark-master:7077
     SPARK_LOCAL_IP: 0.0.0.0
-    HADOOP_CONF_DIR: /opt/bitnami/spark/conf/hadoop
+    HADOOP_CONF_DIR: /opt/spark/conf/hadoop
   volumes:
-    - ./config/hadoop:/opt/bitnami/spark/conf/hadoop:ro
+    - ./config/hadoop:/opt/spark/conf/hadoop:ro
   networks:
     - smart-drive-net
 
 services:
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: smart-drive-kafka
+    hostname: kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_LISTENERS: PLAINTEXT://kafka:9092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:${KAFKA_EXTERNAL_PORT:-9094}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    ports:
+      - "${KAFKA_EXTERNAL_PORT:-9094}:9094"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - smart-drive-net
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server kafka:9092 --list"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+    restart: unless-stopped
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: smart-drive-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command:
+      - /bin/sh
+      - -ec
+      - >-
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists
+        --topic ${KAFKA_TOPIC:-smart-drive-events} --partitions 3 --replication-factor 1
+    networks:
+      - smart-drive-net
+    restart: "no"
+
+  kafka-producer:
+    build:
+      context: .
+      dockerfile: streaming/Dockerfile
+    container_name: smart-drive-kafka-producer
+    profiles: ["tools"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-smart-drive-events}
+    volumes:
+      - ./:/opt/project
+      - ./dataset/sample:/data:ro
+    working_dir: /opt/project
+    networks:
+      - smart-drive-net
+
   namenode:
     image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
     container_name: smart-drive-namenode
@@ -88,16 +159,16 @@ services:
   spark-master:
     <<: *spark-common
     container_name: smart-drive-spark-master
-    command: /opt/bitnami/scripts/spark/run.sh
+    command: ["/opt/spark/sbin/start-master.sh"]
     environment:
-      SPARK_MODE: master
+      SPARK_NO_DAEMONIZE: "true"
       SPARK_MASTER_HOST: spark-master
-      SPARK_MASTER_PORT_NUMBER: 7077
-      SPARK_MASTER_WEBUI_PORT_NUMBER: 8080
-      SPARK_LOCAL_IP: 0.0.0.0
-      HADOOP_CONF_DIR: /opt/bitnami/spark/conf/hadoop
+      SPARK_MASTER_PORT: 7077
+      SPARK_MASTER_WEBUI_PORT: 8080
+      SPARK_LOCAL_IP: spark-master
+      HADOOP_CONF_DIR: /opt/spark/conf/hadoop
     ports:
-      - "${SPARK_MASTER_WEB_PORT:-8080}:8080"
+      - "${SPARK_MASTER_WEB_PORT:-8082}:8080"
       - "${SPARK_MASTER_PORT:-7077}:7077"
     restart: unless-stopped
 
@@ -107,14 +178,12 @@ services:
     depends_on:
       spark-master:
         condition: service_started
-    command: /opt/bitnami/scripts/spark/run.sh
+    command: ["/opt/spark/sbin/start-worker.sh", "spark://spark-master:7077", "--cores", "${SPARK_WORKER_CORES:-2}", "--memory", "${SPARK_WORKER_MEMORY:-2G}"]
     environment:
-      SPARK_MODE: worker
+      SPARK_NO_DAEMONIZE: "true"
       SPARK_MASTER_URL: spark://spark-master:7077
-      SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY:-2G}
-      SPARK_WORKER_CORES: ${SPARK_WORKER_CORES:-2}
-      SPARK_LOCAL_IP: 0.0.0.0
-      HADOOP_CONF_DIR: /opt/bitnami/spark/conf/hadoop
+      SPARK_LOCAL_IP: spark-worker1
+      HADOOP_CONF_DIR: /opt/spark/conf/hadoop
     restart: unless-stopped
 
   spark-worker2:
@@ -123,31 +192,153 @@ services:
     depends_on:
       spark-master:
         condition: service_started
-    command: /opt/bitnami/scripts/spark/run.sh
+    command: ["/opt/spark/sbin/start-worker.sh", "spark://spark-master:7077", "--cores", "${SPARK_WORKER_CORES:-2}", "--memory", "${SPARK_WORKER_MEMORY:-2G}"]
     environment:
-      SPARK_MODE: worker
+      SPARK_NO_DAEMONIZE: "true"
       SPARK_MASTER_URL: spark://spark-master:7077
-      SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY:-2G}
-      SPARK_WORKER_CORES: ${SPARK_WORKER_CORES:-2}
-      SPARK_LOCAL_IP: 0.0.0.0
-      HADOOP_CONF_DIR: /opt/bitnami/spark/conf/hadoop
+      SPARK_LOCAL_IP: spark-worker2
+      HADOOP_CONF_DIR: /opt/spark/conf/hadoop
     restart: unless-stopped
 
-  ui-dashboard:
+  spark-client:
+    <<: *spark-common
+    container_name: smart-drive-spark-client
+    command: ["/bin/sh", "-c", "tail -f /dev/null"]
+    environment:
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_LOCAL_IP: spark-client
+      HADOOP_CONF_DIR: /opt/spark/conf/hadoop
+      PYTHONPATH: /opt/project
+    volumes:
+      - ./:/opt/project
+      - ./config/hadoop:/opt/spark/conf/hadoop:ro
+    working_dir: /opt/project
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: smart-drive-airflow-postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow_postgres_data:/var/lib/postgresql/data
+    networks:
+      - smart-drive-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+    restart: unless-stopped
+
+  airflow-init:
+    image: smart-drive-airflow:2.10.2
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: smart-drive-ui-dashboard
+      dockerfile: airflow/Dockerfile
+    container_name: smart-drive-airflow-init
     depends_on:
-      - namenode
-    environment:
-      HDFS_NAMENODE_URL: http://namenode:9870
-      SPARK_MASTER_URL: spark://spark-master:7077
-    ports:
-      - "${DASHBOARD_PORT:-8501}:8501"
+      postgres:
+        condition: service_healthy
+    environment: &airflow-common-env
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__FERNET_KEY: 9Xh9EjJgZpOe8_sBwmNaPnLjuV2VM0aH7aTArJuYuAs=
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__WEBSERVER__SECRET_KEY: smart-drive-airflow-secret
+      PYTHONPATH: /opt/project
+    entrypoint: /bin/bash
+    command:
+      - -ec
+      - >-
+        airflow db migrate &&
+        (airflow users create --username ${AIRFLOW_USERNAME:-airflow}
+        --password ${AIRFLOW_PASSWORD:-airflow} --firstname SMART --lastname Admin
+        --role Admin --email admin@smart-drive.local || true)
     volumes:
-      - ./ui_dashboard:/app/ui_dashboard:ro
-    command: streamlit run ui_dashboard/app.py --server.address 0.0.0.0 --server.port 8501
+      - ./airflow/dags:/opt/airflow/dags:ro
+      - ./:/opt/project
+    networks:
+      - smart-drive-net
+    restart: "no"
+
+  airflow-webserver:
+    image: smart-drive-airflow:2.10.2
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+    container_name: smart-drive-airflow-webserver
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *airflow-common-env
+    command: webserver
+    ports:
+      - "${AIRFLOW_WEB_PORT:-8081}:8080"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags:ro
+      - ./:/opt/project
+    networks:
+      - smart-drive-net
+    restart: unless-stopped
+
+  airflow-scheduler:
+    image: smart-drive-airflow:2.10.2
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+    container_name: smart-drive-airflow-scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *airflow-common-env
+      SPARK_LOCAL_IP: airflow-scheduler
+      HADOOP_CONF_DIR: /opt/spark/conf/hadoop
+      # Airflow submits Spark jobs, but HDFS Silver/Gold are owned by spark.
+      # Simple HDFS authentication therefore uses the same identity as spark-client.
+      HADOOP_USER_NAME: spark
+    command: scheduler
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags:ro
+      - ./:/opt/project
+      - ./config/hadoop:/opt/spark/conf/hadoop:ro
+    networks:
+      - smart-drive-net
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    container_name: smart-drive-api
+    depends_on:
+      - spark-client
+    environment:
+      DASHBOARD_DATA_DIR: /data/dashboard
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./artifacts/dashboard:/data/dashboard:ro
+    networks:
+      - smart-drive-net
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: smart-drive-frontend
+    depends_on:
+      - api
+    environment:
+      VITE_API_BASE_URL: http://localhost:${API_PORT:-8000}
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
     networks:
       - smart-drive-net
     restart: unless-stopped
@@ -157,6 +348,8 @@ volumes:
   datanode1_data:
   datanode2_data:
   datanode3_data:
+  kafka_data:
+  airflow_postgres_data:
 
 networks:
   smart-drive-net:

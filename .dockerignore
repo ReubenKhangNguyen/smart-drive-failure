@@ -1,0 +1,15 @@
+.git
+.env
+__pycache__
+*.pyc
+.pytest_cache
+dataset/raw/*.zip
+dataset/raw/*.csv
+dataset/sample/*.csv
+artifacts/models/*
+!artifacts/models/README.md
+artifacts/metrics/*
+!artifacts/metrics/README.md
+artifacts/reports/*
+!artifacts/reports/README.md
+frontend/node_modules

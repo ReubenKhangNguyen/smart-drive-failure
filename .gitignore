@@ -17,6 +17,8 @@ artifacts/metrics/*
 !artifacts/metrics/README.md
 artifacts/reports/*
 !artifacts/reports/README.md
+artifacts/dashboard/*
+!artifacts/dashboard/README.md
 
 # Python tooling and logs
 __pycache__/
