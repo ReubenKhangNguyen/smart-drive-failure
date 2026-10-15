@@ -53,7 +53,7 @@ def run(features_path: str, models_path: str, metrics_path: str) -> dict[str, ob
     feature_columns = selected_feature_columns(source)
     train, validation, test = temporal_split(source.withColumn("label", F.col("fail_within_7_days").cast("double")))
     weighted_train = add_class_weight(train)
-    classifiers = {"logistic_regression": LogisticRegression(labelCol="label", featuresCol="features", weightCol="class_weight", maxIter=50, regParam=0.01), "random_forest": RandomForestClassifier(labelCol="label", featuresCol="features", weightCol="class_weight", numTrees=80, maxDepth=8, seed=42)}
+    classifiers = {"logistic_regression": LogisticRegression(labelCol="label", featuresCol="features", weightCol="class_weight", maxIter=50, regParam=0.01), "random_forest": RandomForestClassifier(labelCol="label", featuresCol="features", weightCol="class_weight", numTrees=80, maxDepth=8, maxBins=128, seed=42)}
     results = {}
     for name, classifier in classifiers.items():
         fitted = make_pipeline(feature_columns, classifier).fit(weighted_train)

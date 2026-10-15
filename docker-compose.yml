@@ -166,6 +166,7 @@ services:
       SPARK_MASTER_PORT: 7077
       SPARK_MASTER_WEBUI_PORT: 8080
       SPARK_LOCAL_IP: spark-master
+      SPARK_MASTER_OPTS: "-Dspark.worker.timeout=300"
       HADOOP_CONF_DIR: /opt/spark/conf/hadoop
     ports:
       - "${SPARK_MASTER_WEB_PORT:-8082}:8080"

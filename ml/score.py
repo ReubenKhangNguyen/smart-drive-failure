@@ -12,13 +12,14 @@ from pyspark.sql import functions as F
 
 from analytics.generate_gold import export_json
 from config.settings import ProjectPaths
+from ml.evaluate import positive_probability
 
 def run(features_path: str, model_path: str, predictions_path: str, dashboard_dir: str) -> int:
     """Apply the saved model to the newest observations and write HDFS/JSON outputs."""
     spark = SparkSession.builder.appName("smart-drive-scoring").getOrCreate()
     features = spark.read.parquet(features_path)
     latest = features.withColumn("row_rank", F.row_number().over(Window.partitionBy("serial_number").orderBy(F.desc("date")))).filter("row_rank = 1").drop("row_rank")
-    scored = PipelineModel.load(model_path).transform(latest).select("serial_number", "model", "date", F.col("probability")[1].alias("failure_risk_7d")).orderBy(F.desc("failure_risk_7d"))
+    scored = PipelineModel.load(model_path).transform(latest).select("serial_number", "model", "date", positive_probability(F.col("probability")).alias("failure_risk_7d")).orderBy(F.desc("failure_risk_7d"))
     scored.write.mode("overwrite").parquet(predictions_path)
     export_json(scored, Path(dashboard_dir) / "predictions.json", 500)
     count = scored.count()

@@ -3,12 +3,23 @@
 from __future__ import annotations
 
 from pyspark.ml.evaluation import BinaryClassificationEvaluator
+from pyspark import SparkContext
 from pyspark.sql import DataFrame
+from pyspark.sql.column import Column
 from pyspark.sql import functions as F
+from pyspark.sql.functions import _to_java_column
+
+def positive_probability(vector):
+    """Read class-1 probability from a Spark ML dense or sparse vector."""
+    context = SparkContext._active_spark_context
+    if context is None or context._jvm is None:
+        raise RuntimeError("A running SparkContext is required to extract class probabilities.")
+    values = Column(context._jvm.org.apache.spark.ml.functions.vector_to_array(_to_java_column(vector), "float64"))
+    return values[1]
 
 def metrics_at_threshold(predictions: DataFrame, threshold: float) -> dict[str, float]:
     """Calculate precision, recall, F1 and confusion-matrix counts in Spark."""
-    scored = predictions.withColumn("positive_score", F.col("probability")[1]).withColumn("threshold_prediction", (F.col("positive_score") >= F.lit(threshold)).cast("int"))
+    scored = predictions.withColumn("positive_score", positive_probability(F.col("probability"))).withColumn("threshold_prediction", (F.col("positive_score") >= F.lit(threshold)).cast("int"))
     row = scored.agg(F.sum(F.when((F.col("label") == 1) & (F.col("threshold_prediction") == 1), 1).otherwise(0)).alias("tp"), F.sum(F.when((F.col("label") == 0) & (F.col("threshold_prediction") == 1), 1).otherwise(0)).alias("fp"), F.sum(F.when((F.col("label") == 1) & (F.col("threshold_prediction") == 0), 1).otherwise(0)).alias("fn"), F.sum(F.when((F.col("label") == 0) & (F.col("threshold_prediction") == 0), 1).otherwise(0)).alias("tn")).first().asDict()
     precision = row["tp"] / (row["tp"] + row["fp"]) if row["tp"] + row["fp"] else 0.0
     recall = row["tp"] / (row["tp"] + row["fn"]) if row["tp"] + row["fn"] else 0.0
