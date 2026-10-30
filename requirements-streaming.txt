@@ -1,0 +1,3 @@
+# Only for the Kafka demo producer (scripts/run_streaming_demo.py, ingestion/kafka_producer.py); install in a throwaway venv.
+# 2.0.2 does not import on Python 3.12+ (kafka.vendor.six.moves); 3.0.11 supports Python >= 3.8.
+kafka-python==3.0.11

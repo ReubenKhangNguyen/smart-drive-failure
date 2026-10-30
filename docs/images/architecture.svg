@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="430" viewBox="0 0 1100 430" role="img" aria-labelledby="t d">
+  <title id="t">Architecture of SMART Drive Failure Prediction</title>
+  <desc id="d">Backblaze CSV flows into Bronze, Silver and Gold layers on HDFS, then Spark MLlib scores drives and Streamlit shows the results. An Airflow DAG orchestrates the batch pipeline; a Kafka demo streams one day of rows through the same cleaning code.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#475569"/>
+    </marker>
+  </defs>
+  <rect width="1100" height="430" rx="16" fill="#f8fafc" stroke="#e2e8f0"/>
+
+  <!-- orchestration bar -->
+  <rect x="190" y="22" width="870" height="30" rx="15" fill="#16a34a"/>
+  <text x="625" y="43" text-anchor="middle" font-family="'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff">Airflow DAG orchestrates the batch pipeline (8 tasks)</text>
+
+  <!-- main pipeline arrows -->
+  <g stroke="#475569" stroke-width="2.5" fill="none" marker-end="url(#arrow)">
+    <path d="M160 115 H188"/><path d="M310 115 H338"/><path d="M460 115 H488"/>
+    <path d="M610 115 H638"/><path d="M760 115 H788"/><path d="M910 115 H938"/>
+    <path d="M400 150 V250 H488"/>
+    <path d="M760 250 H1000 V152"/>
+  </g>
+
+  <!-- main pipeline boxes -->
+  <g font-family="'Segoe UI', Helvetica, Arial, sans-serif" text-anchor="middle">
+    <rect x="40" y="80" width="120" height="70" rx="10" fill="#e2e8f0" stroke="#64748b" stroke-width="2"/>
+    <text x="100" y="112" font-size="16" font-weight="700" fill="#0f172a">Backblaze</text>
+    <text x="100" y="131" font-size="13" fill="#334155">CSV 2026-Q1</text>
+
+    <path d="M190 90 A60 10 0 0 1 310 90 V140 A60 10 0 0 1 190 140 Z" fill="#b45309" stroke="#78350f" stroke-width="2"/>
+    <ellipse cx="250" cy="90" rx="60" ry="10" fill="#d97706" stroke="#78350f" stroke-width="2"/>
+    <text x="250" y="119" font-size="16" font-weight="700" fill="#ffffff">Bronze</text>
+    <text x="250" y="135" font-size="12" fill="#fde68a">raw CSV, immutable</text>
+
+    <path d="M340 90 A60 10 0 0 1 460 90 V140 A60 10 0 0 1 340 140 Z" fill="#94a3b8" stroke="#475569" stroke-width="2"/>
+    <ellipse cx="400" cy="90" rx="60" ry="10" fill="#cbd5e1" stroke="#475569" stroke-width="2"/>
+    <text x="400" y="119" font-size="16" font-weight="700" fill="#0f172a">Silver</text>
+    <text x="400" y="135" font-size="12" fill="#1e293b">clean Parquet</text>
+
+    <path d="M490 90 A60 10 0 0 1 610 90 V140 A60 10 0 0 1 490 140 Z" fill="#f59e0b" stroke="#b45309" stroke-width="2"/>
+    <ellipse cx="550" cy="90" rx="60" ry="10" fill="#fcd34d" stroke="#b45309" stroke-width="2"/>
+    <text x="550" y="119" font-size="16" font-weight="700" fill="#0f172a">Gold</text>
+    <text x="550" y="135" font-size="13" fill="#1e293b">features</text>
+
+    <rect x="640" y="80" width="120" height="70" rx="10" fill="#7c3aed" stroke="#4c1d95" stroke-width="2"/>
+    <text x="700" y="112" font-size="16" font-weight="700" fill="#ffffff">Spark MLlib</text>
+    <text x="700" y="131" font-size="13" fill="#ede9fe">train, evaluate, score</text>
+
+    <path d="M790 90 A60 10 0 0 1 910 90 V140 A60 10 0 0 1 790 140 Z" fill="#f59e0b" stroke="#b45309" stroke-width="2"/>
+    <ellipse cx="850" cy="90" rx="60" ry="10" fill="#fcd34d" stroke="#b45309" stroke-width="2"/>
+    <text x="850" y="119" font-size="16" font-weight="700" fill="#0f172a">Gold</text>
+    <text x="850" y="135" font-size="13" fill="#1e293b">predictions</text>
+
+    <rect x="940" y="80" width="120" height="70" rx="10" fill="#0891b2" stroke="#155e75" stroke-width="2"/>
+    <text x="1000" y="112" font-size="16" font-weight="700" fill="#ffffff">Streamlit</text>
+    <text x="1000" y="131" font-size="13" fill="#cffafe">dashboard</text>
+
+    <path d="M490 225 A135 10 0 0 1 760 225 V275 A135 10 0 0 1 490 275 Z" fill="#f59e0b" stroke="#b45309" stroke-width="2"/>
+    <ellipse cx="625" cy="225" rx="135" ry="10" fill="#fcd34d" stroke="#b45309" stroke-width="2"/>
+    <text x="625" y="254" font-size="16" font-weight="700" fill="#0f172a">Gold analytics + health_status</text>
+    <text x="625" y="271" font-size="13" fill="#1e293b">AFR, SMART tables, K-Means</text>
+  </g>
+
+  <!-- Kafka demo (dashed) -->
+  <g stroke="#6b7280" stroke-width="2" fill="none" stroke-dasharray="6 5" marker-end="url(#arrow)">
+    <path d="M190 365 H248"/><path d="M440 365 H498"/>
+  </g>
+  <g font-family="'Segoe UI', Helvetica, Arial, sans-serif" text-anchor="middle" fill="#374151">
+    <rect x="40" y="335" width="150" height="60" rx="10" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 5"/>
+    <text x="115" y="361" font-size="15" font-weight="700">Kafka</text>
+    <text x="115" y="379" font-size="12">one day of rows</text>
+
+    <rect x="250" y="335" width="190" height="60" rx="10" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 5"/>
+    <text x="345" y="361" font-size="15" font-weight="700">Structured Streaming</text>
+    <text x="345" y="379" font-size="12">same cleaning code</text>
+
+    <path d="M500 345 A85 10 0 0 1 670 345 V385 A85 10 0 0 1 500 385 Z" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 5"/>
+    <ellipse cx="585" cy="345" rx="85" ry="10" fill="#f3f4f6" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 5"/>
+    <text x="585" y="371" font-size="14" font-weight="700">streaming_output</text>
+    <text x="585" y="385" font-size="11">demo only</text>
+
+    <text x="700" y="358" text-anchor="start" font-size="13" fill="#6b7280">Kafka path = extra demonstration;</text>
+    <text x="700" y="378" text-anchor="start" font-size="13" fill="#6b7280">the batch pipeline stays the source of truth.</text>
+  </g>
+</svg>

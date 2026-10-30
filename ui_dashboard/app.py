@@ -1,19 +1,29 @@
-"""Temporary Streamlit UI shell: it will read prepared HDFS Gold outputs and display SMART-drive analytics and seven-day failure-risk predictions."""
+"""Streamlit entry point: a thin router. Pages only read artifacts/dashboard (HD6-HD8), never HDFS.
 
-import os
+Page scripts live in views/, NOT pages/: with a pages/ directory Streamlit runs a deep-linked page
+script directly (bypassing this file), so imports fail on refresh or when opening a page URL."""
 
-import streamlit as st
+import sys
+from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-st.set_page_config(page_title="SMART Drive Failure", page_icon="💽", layout="wide")
-st.title("SMART Drive Failure")
-st.caption("Big Data analytics and 7-day failure-risk prediction")
+import streamlit as st  # noqa: E402
 
-st.info(
-    "The infrastructure is running. Execute ingestion and the Spark pipeline to populate "
-    "the HDFS Gold layer; this UI will then display the prepared outputs."
-)
+from ui_dashboard import style  # noqa: E402
 
-left, right = st.columns(2)
-left.metric("HDFS endpoint", os.environ.get("HDFS_NAMENODE_URL", "Not configured"))
-right.metric("Spark endpoint", os.environ.get("SPARK_MASTER_URL", "Not configured"))
+st.set_page_config(page_title="SMART Drive Failure", page_icon=":material/hard_drive:", layout="wide")
+style.apply()
+
+PAGES = [
+    st.Page("views/overview.py", title="Tổng quan", icon=":material/dashboard:", default=True),
+    st.Page("views/data_dictionary.py", title="Dữ liệu và thuộc tính", icon=":material/dataset:"),
+    st.Page("views/smart_analysis.py", title="Phân tích SMART", icon=":material/monitoring:"),
+    st.Page("views/data_analytics.py", title="Tình trạng ổ cứng", icon=":material/health_and_safety:"),
+    st.Page("views/failure_prediction.py", title="Dự đoán hỏng 7 ngày", icon=":material/query_stats:"),
+    st.Page("views/model_training.py", title="Huấn luyện mô hình", icon=":material/model_training:"),
+    st.Page("views/pipeline_walkthrough.py", title="Quy trình 9 bước", icon=":material/account_tree:"),
+    st.Page("views/cluster_performance.py", title="Hiệu năng cụm", icon=":material/speed:"),
+]
+
+st.navigation(PAGES).run()

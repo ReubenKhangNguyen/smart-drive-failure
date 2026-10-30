@@ -8,6 +8,7 @@ from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 
 from analytics.smart_analysis import failure_dates
+from config.settings import enable_dynamic_overwrite
 
 RULES_VERSION = "rules_v1"
 
@@ -66,7 +67,7 @@ def classify_health(df: DataFrame, rules_version: str = RULES_VERSION) -> DataFr
     )
 
 
-def rule_risk_score(df: DataFrame) -> DataFrame:
+def rule_risk_score(df: DataFrame) -> DataFrame: # lua chon cot risk_score cho baseline rules_v1: dem so luong cot WATCH bi vi pham, cong them diem neu dat ngưỡng CRITICAL severe. Chi dung de xep hang o top-K baseline so voi model ML trong Phase 6; health_level 3-level khong phai la ranking.
     """Numeric ranking score for the rules_v1 baseline: counts violated WATCH columns,
     with a bonus for hitting the CRITICAL severe threshold. Used only to rank drives
     for a top-K baseline comparison against the ML model in Phase 6; the 3-level
@@ -116,6 +117,7 @@ def baseline_failure_rate_by_level(silver_df: DataFrame, health_df: DataFrame, d
 
 
 def run(spark: SparkSession, silver_path: str, health_status_path: str) -> Dict[str, object]:
+    enable_dynamic_overwrite(spark)
     silver_df = spark.read.parquet(silver_path)
     health_df = classify_health(silver_df)
 

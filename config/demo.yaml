@@ -1,0 +1,46 @@
+# Demo configuration: the SAME code as the real pipeline, pointed at an isolated area, on 4 weeks of Q1 data.
+#
+# Every HDFS path moves under /smart-drive-demo and reports/tables go to $SMART_DRIVE_ARTIFACTS (artifacts/demo),
+# so a demo run never touches the real Bronze/Silver/Gold, the saved model or the real reports. Only the keys set
+# here differ from project.yaml (`base`); tests/test_demo_config.py checks that no HDFS path was forgotten.
+#
+# Calendar (28 days): warmup 01-01..01-07, train 01-08..01-18, validation 01-19..01-21. Rows after 01-21 only
+# keep drives already known to fail (right-censoring), so the demo has no usable test split and does not evaluate one.
+base: project.yaml
+
+project:
+  name: smart-drive-failure-demo
+
+hdfs:
+  bronze: "/smart-drive-demo/bronze/year=2026/quarter=Q1"
+  silver: "/smart-drive-demo/silver/daily"
+  features: "/smart-drive-demo/gold/features"
+  analytics: "/smart-drive-demo/gold/analytics"
+  predictions: "/smart-drive-demo/gold/predictions"
+  health_status: "/smart-drive-demo/gold/health_status"
+  predictions_daily_topk: "/smart-drive-demo/gold/predictions_daily_topk"
+  scored_days: "/smart-drive-demo/gold/scored_days"
+  models_base: "/smart-drive-demo/models"
+  streaming_output: "/smart-drive-demo/streaming_output"
+  streaming_checkpoint: "/smart-drive-demo/streaming_checkpoint"
+  benchmark_tmp: "/smart-drive-demo/benchmark_tmp"
+  silver_replication: 1
+  gold_replication: 1
+
+data:
+  start_date: "2026-01-01"
+  end_date: "2026-01-28"
+  warmup_end_date: "2026-01-07"
+  train_end_date: "2026-01-18"
+  val_end_date: "2026-01-21"
+  quarters: []
+
+ml:
+  model_version: "demo-v1"
+  models:
+    - logistic_regression
+
+kmeans:
+  k_min: 3
+  k_max: 5
+  max_iter: 20
