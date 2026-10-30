@@ -13,12 +13,12 @@ from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 
 from analytics.build_analytics import DEFAULT_EXPORT_DIR, FAILED_VIEW, SILVER_VIEW, register_views, write_table
-from config.settings import hdfs_uri, load_config
+from config.settings import artifacts_dir, hdfs_uri, load_config
 
 SNAPSHOT_VIEW = "drive_snapshot"
 CLUSTERS_VIEW = "drive_clusters"
 HEALTH_VIEW = "health_status_view"
-DEFAULT_REPORT_DIR = Path(__file__).resolve().parent.parent / "artifacts" / "reports"
+DEFAULT_REPORT_DIR = artifacts_dir() / "reports"
 MISSING_COLUMN = "smart_187_raw"  # the attribute whose null share is reported per cluster
 
 LIMITATIONS = (

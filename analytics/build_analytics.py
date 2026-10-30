@@ -8,11 +8,11 @@ from typing import Any, Dict, List, Sequence
 from pyspark.sql import DataFrame, SparkSession
 
 from analytics.failure_analysis import afr_by_group
-from config.settings import hdfs_uri, load_config
+from config.settings import artifacts_dir, hdfs_uri, load_config
 
 SILVER_VIEW = "silver_daily"
 FAILED_VIEW = "failed_drives"
-DEFAULT_EXPORT_DIR = Path(__file__).resolve().parent.parent / "artifacts" / "dashboard"
+DEFAULT_EXPORT_DIR = artifacts_dir() / "dashboard"
 SIGNAL_WINDOWS = (7, 30)
 
 

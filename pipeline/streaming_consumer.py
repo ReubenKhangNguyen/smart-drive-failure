@@ -16,10 +16,10 @@ from pyspark.sql import functions as F
 from pyspark.sql.streaming import StreamingQuery
 from pyspark.sql.types import StringType, StructField, StructType
 
-from config.settings import hdfs_uri, load_config
+from config.settings import artifacts_dir, hdfs_uri, load_config
 from processing.spark_jobs.smart_etl import REQUIRED_RAW_COLUMNS, cast_and_clean_columns
 
-DEFAULT_SUMMARY = Path(__file__).resolve().parent.parent / "artifacts" / "reports" / "streaming_consumer_summary.json"
+DEFAULT_SUMMARY = artifacts_dir() / "reports" / "streaming_consumer_summary.json"
 
 
 def build_raw_schema() -> StructType:

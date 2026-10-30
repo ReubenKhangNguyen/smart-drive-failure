@@ -16,10 +16,10 @@ from pyspark.sql import functions as F
 
 from analytics.build_analytics import DEFAULT_EXPORT_DIR
 from analytics.health_status import WATCH_COLUMNS, baseline_failure_rate_by_level
-from config.settings import hdfs_uri, load_config, quarters_from_data
+from config.settings import artifacts_dir, hdfs_uri, load_config, quarters_from_data
 from ml.train import add_class_weight
 
-DEFAULT_REPORTS_DIR = Path(__file__).resolve().parent.parent / "artifacts" / "reports"
+DEFAULT_REPORTS_DIR = artifacts_dir() / "reports"
 HISTORY_DAYS = 30
 TOP_N_FEATURES = 15
 RF_IMPORTANCE_FILE = "rf_feature_importance_phase6.json"

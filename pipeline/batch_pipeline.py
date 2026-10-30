@@ -5,11 +5,11 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from config.settings import enable_dynamic_overwrite, hdfs_uri
+from config.settings import artifacts_dir, enable_dynamic_overwrite, hdfs_uri
 
 PipelineStep = Tuple[str, Callable[[], Dict[str, Any]]]
 
-DEFAULT_REPORT_DIR = Path(__file__).resolve().parent.parent / "artifacts" / "reports"
+DEFAULT_REPORT_DIR = artifacts_dir() / "reports"
 NOT_APPLICABLE = "không áp dụng"
 
 # Names of the batch steps, in pipeline order (see build_steps); `--steps` selects a subset of them.

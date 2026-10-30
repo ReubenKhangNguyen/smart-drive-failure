@@ -149,3 +149,32 @@ def test_smart_etl_resolves_its_paths_from_a_quarter_or_from_explicit_arguments(
         resolve_paths(config, None, "hdfs://x/b")
     with pytest.raises(ValueError, match="unknown quarter"):
         resolve_paths(config, "2030-Q1")
+
+
+# ---------------------------------------------------------------- derived configs and the artifacts directory
+def test_deep_merge_replaces_leaves_and_lists_but_merges_nested_dicts():
+    from config.settings import _deep_merge
+
+    base = {"a": {"x": 1, "y": 2}, "items": [1, 2, 3], "keep": "k"}
+    out = _deep_merge(base, {"a": {"y": 20, "z": 30}, "items": [9]})
+
+    assert out == {"a": {"x": 1, "y": 20, "z": 30}, "items": [9], "keep": "k"}
+    assert base["a"] == {"x": 1, "y": 2}  # the base is not modified
+
+
+def test_a_config_with_base_overrides_only_the_keys_it_sets(tmp_path):
+    (tmp_path / "base.yaml").write_text("hdfs:\n  silver: /real/silver\n  gold: /real/gold\nml:\n  k: 100\n", encoding="utf-8")
+    (tmp_path / "derived.yaml").write_text("base: base.yaml\nhdfs:\n  silver: /demo/silver\n", encoding="utf-8")
+
+    config = load_config(tmp_path / "derived.yaml")
+
+    assert config == {"hdfs": {"silver": "/demo/silver", "gold": "/real/gold"}, "ml": {"k": 100}}
+
+
+def test_artifacts_dir_defaults_to_the_repo_and_follows_the_environment(monkeypatch, tmp_path):
+    from config.settings import artifacts_dir
+
+    monkeypatch.delenv("SMART_DRIVE_ARTIFACTS", raising=False)
+    assert artifacts_dir().name == "artifacts" and (artifacts_dir().parent / "config" / "project.yaml").exists()  # <repo>/artifacts
+    monkeypatch.setenv("SMART_DRIVE_ARTIFACTS", str(tmp_path / "demo"))
+    assert artifacts_dir() == tmp_path / "demo"

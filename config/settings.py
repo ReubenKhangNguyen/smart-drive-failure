@@ -23,11 +23,36 @@ def enable_dynamic_overwrite(spark: Any) -> None:
     spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
 
 
+def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+    """Nested dicts are merged key by key; any other value (including a list) in `override` replaces the base one."""
+    merged = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
 def load_config(path: Optional[Path] = None) -> Dict[str, Any]:
-    """Load project.yaml (or SMART_DRIVE_CONFIG override) into a dict."""
+    """Load project.yaml (or SMART_DRIVE_CONFIG override) into a dict.
+
+    A config may start from another one with `base: <file>` (relative to itself); only the keys it sets are
+    overridden. config/demo.yaml uses this to point every HDFS path at the isolated demo area without copying
+    the whole project config (a copy would silently drift)."""
     config_path = Path(path) if path else Path(os.environ.get("SMART_DRIVE_CONFIG", DEFAULT_CONFIG_PATH))
     with open(config_path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        config = yaml.safe_load(f) or {}
+    base = config.pop("base", None)
+    if base:
+        return _deep_merge(load_config(config_path.parent / base), config)
+    return config
+
+
+def artifacts_dir() -> Path:
+    """Where reports and dashboard tables are written: <repo>/artifacts, or $SMART_DRIVE_ARTIFACTS (the demo run
+    sets it, so it never overwrites the real reports)."""
+    return Path(os.environ.get("SMART_DRIVE_ARTIFACTS") or Path(__file__).resolve().parent.parent / "artifacts")
 
 
 # ---------------------------------------------------------------- out-of-time quarters

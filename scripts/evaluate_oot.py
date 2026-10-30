@@ -17,10 +17,10 @@ from pyspark.ml import PipelineModel
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 
-from config.settings import find_quarter, hdfs_uri, load_config
+from config.settings import artifacts_dir, find_quarter, hdfs_uri, load_config
 from ml.oot_eval import evaluate_frozen_on_oot
 
-REPORT_DIR = Path(__file__).resolve().parent.parent / "artifacts" / "reports"
+REPORT_DIR = artifacts_dir() / "reports"
 
 
 def main() -> int:
