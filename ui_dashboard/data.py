@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -9,6 +10,7 @@ import pandas as pd
 # Dashboard chi doc artifacts/dashboard (HD6, HD7, HD8) va artifacts/reports; khong doc HDFS, khong import config/.
 DEFAULT_DASHBOARD_DIR = Path(__file__).resolve().parent.parent / "artifacts" / "dashboard"
 DEFAULT_REPORTS_DIR = Path(__file__).resolve().parent.parent / "artifacts" / "reports"
+DEFAULT_DEMO_DIR = Path(__file__).resolve().parent.parent / "artifacts" / "demo"
 
 EXPORT_JOB = "analytics/export_dashboard.py"
 TABLES: Dict[str, Tuple[str, str]] = {
@@ -66,8 +68,33 @@ def dashboard_dir() -> Path:
     return Path(os.environ.get("SMART_DASHBOARD_DIR", str(DEFAULT_DASHBOARD_DIR)))
 
 
+def demo_dir() -> Path:
+    return Path(os.environ.get("SMART_DEMO_DIR", str(DEFAULT_DEMO_DIR)))
+
+
+def read_json(path: Path) -> Optional[dict]:
+    """A JSON evidence file, or None when missing or half written (the runner replaces files atomically, but be safe)."""
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 def reports_dir() -> Path:
     return Path(os.environ.get("SMART_REPORTS_DIR", str(DEFAULT_REPORTS_DIR)))
+
+
+LOSS_FILE = "training_loss_lr.json"
+
+
+def load_loss_history(base: Optional[Path] = None) -> Optional[dict]:
+    """Loss per iteration of the Logistic Regression refit (scripts/export_loss_history.py), or None when the file is missing
+    or not usable (a page never crashes on missing data)."""
+    data_ = read_json((base or reports_dir()) / LOSS_FILE)
+    history = (data_ or {}).get("objective_history")
+    if not isinstance(history, list) or len(history) < 2:
+        return None
+    return data_
 
 
 def table_path(name: str, base: Optional[Path] = None) -> Path:

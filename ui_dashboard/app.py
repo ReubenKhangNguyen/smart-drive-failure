@@ -10,14 +10,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import streamlit as st  # noqa: E402
 
-st.set_page_config(page_title="SMART Drive Failure", page_icon="💽", layout="wide")
+from ui_dashboard import style  # noqa: E402
+
+st.set_page_config(page_title="SMART Drive Failure", page_icon=":material/hard_drive:", layout="wide")
+style.apply()
 
 PAGES = [
-    st.Page("views/overview.py", title="Tổng quan", icon="📊", default=True),
-    st.Page("views/smart_analysis.py", title="Phân tích SMART", icon="🔬"),
-    st.Page("views/data_analytics.py", title="Tình trạng ổ cứng", icon="🩺"),
-    st.Page("views/failure_prediction.py", title="Dự đoán hỏng 7 ngày", icon="⚠️"),
-    st.Page("views/cluster_performance.py", title="Hiệu năng cụm", icon="⚙️"),
+    st.Page("views/overview.py", title="Tổng quan", icon=":material/dashboard:", default=True),
+    st.Page("views/data_dictionary.py", title="Dữ liệu và thuộc tính", icon=":material/dataset:"),
+    st.Page("views/smart_analysis.py", title="Phân tích SMART", icon=":material/monitoring:"),
+    st.Page("views/data_analytics.py", title="Tình trạng ổ cứng", icon=":material/health_and_safety:"),
+    st.Page("views/failure_prediction.py", title="Dự đoán hỏng 7 ngày", icon=":material/query_stats:"),
+    st.Page("views/model_training.py", title="Huấn luyện mô hình", icon=":material/model_training:"),
+    st.Page("views/pipeline_walkthrough.py", title="Quy trình 9 bước", icon=":material/account_tree:"),
+    st.Page("views/cluster_performance.py", title="Hiệu năng cụm", icon=":material/speed:"),
 ]
 
 st.navigation(PAGES).run()
