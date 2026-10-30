@@ -49,6 +49,8 @@ x-airflow-common: &airflow-common
     - ./config/hadoop:/opt/spark/conf/hadoop:ro
     - .:/opt/smart-drive:ro
     - ./artifacts:/opt/smart-drive/artifacts
+    # the CSV folders, read-only: the demo DAG loads its 28 days from here (the namenode mounts the same folder)
+    - "C:/dataset_smart_drive_failure:/external_data_all:ro"
   working_dir: /opt/smart-drive
   networks:
     - smart-drive-net
@@ -190,7 +192,7 @@ services:
     volumes:
       - ./ui_dashboard:/app/ui_dashboard:ro
       - ./artifacts:/app/artifacts:ro
-    command: streamlit run ui_dashboard/app.py --server.address 0.0.0.0 --server.port 8501
+    command: streamlit run ui_dashboard/app.py --server.address 0.0.0.0 --server.port 8501 --theme.base light --theme.primaryColor "#2a78d6" --theme.backgroundColor "#fcfcfb" --theme.secondaryBackgroundColor "#f3f2ef" --theme.textColor "#0b0b0b" --theme.font "sans serif"
     networks:
       - smart-drive-net
     restart: unless-stopped

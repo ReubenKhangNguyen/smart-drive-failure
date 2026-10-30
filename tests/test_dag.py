@@ -96,3 +96,19 @@ def test_rendering_a_quarter_fills_the_command_with_that_quarter(dag_bag):
         assert "--quarter 2026-Q3" in rendered and "{{" not in rendered, task_id
     export = dag.get_task("export_dashboard")
     assert "--quarter" not in export.render_template(export.bash_command, {"params": {"quarter": "2026-Q3"}})
+
+
+# ---------------------------------------------------------------- demo DAG (nine steps on the isolated area)
+def test_the_demo_dag_is_a_manual_chain_of_the_demo_steps(dag_bag):
+    from pipeline.demo_spec import DEMO_DAG_ID, DEMO_POOL, DEMO_STEPS
+
+    dag = dag_bag.dags[DEMO_DAG_ID]
+    order = [t.task_id for t in dag.topological_sort()]
+
+    assert order == [s.task_id for s in DEMO_STEPS]
+    assert dag.schedule_interval is None and dag.max_active_runs == 1
+    for upstream, downstream in zip(order, order[1:]):
+        assert dag.get_task(upstream).downstream_task_ids == {downstream}
+    for step in DEMO_STEPS:
+        task = dag.get_task(step.task_id)
+        assert task.retries == 0 and task.pool == (DEMO_POOL if step.uses_spark else "default_pool")
